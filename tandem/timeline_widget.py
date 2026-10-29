@@ -8,7 +8,7 @@ import pyqtgraph as pg
 from PySide6.QtCore import Qt,QDate,QTimer,QThread,Signal,Slot,QSize,QRect,QPoint,QLocale,QRectF,QPointF,QEvent
 from PySide6.QtGui import QFont,QFontMetrics,QPainterPath
 from PySide6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QGridLayout,QLabel,QPushButton,QDateEdit,
-    QComboBox,QSplitter,QScrollArea,QGroupBox,QFormLayout,QProgressBar,QFrame,QToolButton,QLayout,QSizePolicy,QApplication,QGraphicsPathItem)
+    QComboBox,QSplitter,QScrollArea,QGroupBox,QFormLayout,QProgressBar,QFrame,QToolButton,QLayout,QSizePolicy,QApplication,QGraphicsPathItem,QDialog,QCalendarWidget)
 from .timeline_data import load_timeline,timeline_bounds
 from .pump_context import load_context,context_at
 from .plot_symbols import symbol,icon,COLORS
@@ -123,12 +123,13 @@ class TimelineWidget(QWidget):
     def __init__(self,database,parent=None):
         super().__init__(parent);self.database=database;self.worker=None;self.initialized=False;self.busy=False
         self.bounds=None;self.bundle=None;self.pending=None;self.frozen=False;self._drawing=False;self._reload_after=False;self._preserve_view=None
-        self.current_start=None;self.current_width=86400;self.last_hover=None
+        self.current_start=None;self.current_width=86400;self.last_hover=None;self.calendar_popup=None
         layout=QVBoxLayout(self);layout.setContentsMargins(4,0,4,0);layout.setSpacing(10)
         toolbar=QFrame();toolbar.setObjectName('timelineToolbar');tools=QHBoxLayout(toolbar);tools.setContentsMargins(0,0,0,0);tools.setSpacing(8)
         self.previous=QPushButton('Anterior');self.previous.setToolTip('Retroceder una ventana');self.previous.clicked.connect(lambda:self.shift(-1))
         self.next=QPushButton('Siguiente');self.next.setToolTip('Avanzar una ventana');self.next.clicked.connect(lambda:self.shift(1))
         self.date=QDateEdit();self.date.setCalendarPopup(True);self.date.setLocale(QLocale(QLocale.Language.Spanish,QLocale.Country.Spain));self.date.setDisplayFormat('ddd d MMM yyyy');self.date.setMinimumWidth(180);self.date.setDate(QDate.currentDate())
+        self.date.installEventFilter(self);self.date.lineEdit().installEventFilter(self)
         self.window=QComboBox()
         for label,hours in (('3 horas',3),('6 horas',6),('12 horas',12),('24 horas',24),('48 horas',48),('7 días',168)):self.window.addItem(label,hours*3600)
         self.window.setCurrentIndex(3);self.window.activated.connect(lambda _index:self.request(self.current_start,self.window.currentData()) if self.current_start is not None else None);self.window.setToolTip('Periodo visible; pulsa Ver para aplicar')
@@ -146,7 +147,7 @@ class TimelineWidget(QWidget):
             text=QLabel(label);text.setStyleSheet('font-size:10.5pt;color:#344c65;');row.addWidget(pictogram);row.addWidget(text);legend_layout.addWidget(chip);self.legend_entries.append((name,chip))
         layout.addWidget(self.legend)
         basal_hint=QLabel('Basal: azul sobre el perfil · ámbar bajo el perfil · referencia discontinua');basal_hint.setStyleSheet('color:#62748a;font-size:9.5pt;');layout.addWidget(basal_hint)
-        info=QHBoxLayout();self.range_label=QLabel('Elige un día para explorar el histórico.');self.range_label.setObjectName('muted');self.range_label.setMinimumWidth(305);info.addWidget(self.range_label);info.addStretch()
+        info=QHBoxLayout();self.range_label=QPushButton('Elige un día para explorar el histórico.');self.range_label.setFlat(True);self.range_label.setCursor(Qt.CursorShape.PointingHandCursor);self.range_label.setToolTip('Abrir calendario y elegir un día');self.range_label.setStyleSheet('QPushButton {text-align:left;color:#64758b;font-size:10pt;border:1px solid transparent;background:transparent;padding:0;min-height:0;} QPushButton:hover {color:#087f86;border-color:#bbd9dc;}');self.range_label.clicked.connect(lambda:self._choose_view_date(self.range_label));self.range_label.setMinimumWidth(305);info.addWidget(self.range_label);info.addStretch()
         hint=QLabel('Arrastrar: mover  ·  Rueda: zoom  ·  Clic: fijar');hint.setObjectName('muted');info.addWidget(hint);layout.addLayout(info)
         self.loading=QProgressBar();self.loading.setTextVisible(False);self.loading.setFixedHeight(3);self.loading.setRange(0,1);self.loading.setValue(0);layout.addWidget(self.loading)
         self.alert=QLabel('');self.alert.setWordWrap(True);self.alert.setStyleSheet('background:#fff4db;border:1px solid #ead39a;border-radius:6px;padding:7px;color:#725520;font-size:10pt;');self.alert.hide();layout.addWidget(self.alert)
@@ -185,7 +186,6 @@ class TimelineWidget(QWidget):
         self.debounce=QTimer(self);self.debounce.setSingleShot(True);self.debounce.setInterval(350);self.debounce.timeout.connect(self._load_view_range)
         self.mode_relayout=QTimer(self);self.mode_relayout.setSingleShot(True);self.mode_relayout.setInterval(65);self.mode_relayout.timeout.connect(self._layout_mode_labels);self.mode_relayout.timeout.connect(self._position_event_markers)
         self.mode_relayout.timeout.connect(self._pad_bolus_axis)
-        self.mode_relayout.timeout.connect(self._label_profile)
         panel=QFrame();panel.setObjectName('timelineInspector');sidebar=QVBoxLayout(panel);sidebar.setContentsMargins(14,12,14,12);sidebar.setSpacing(12)
         self.instant=QLabel('Explora un instante');self.instant.setWordWrap(True);self.instant.setStyleSheet('font-weight:700;font-size:13pt;color:#172b42;');sidebar.addWidget(self.instant)
         self.inspector_hint=QLabel('Mueve el cursor o fija una selección.');self.inspector_hint.setWordWrap(True);self.inspector_hint.setObjectName('muted');sidebar.addWidget(self.inspector_hint)
@@ -217,7 +217,7 @@ class TimelineWidget(QWidget):
         self.detail.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         note=QLabel('Ajustes según la última observación anterior al cursor.');note.setObjectName('muted');note.setWordWrap(True);note.setStyleSheet('font-size:9.5pt;color:#728398;');sidebar.addWidget(note);sidebar.addStretch()
         scroll=QScrollArea();scroll.setWidgetResizable(True);scroll.setWidget(panel);scroll.setMinimumWidth(285);scroll.setMaximumWidth(330);scroll.setFrameShape(QScrollArea.Shape.NoFrame);split.addWidget(scroll);split.setSizes([1000,310])
-        self.controls=(self.previous,self.next,self.date,self.window,self.pump,self.go,self.latest)
+        self.controls=(self.previous,self.next,self.date,self.window,self.pump,self.go,self.latest,self.range_label)
 
     def activate(self):
         if not self.initialized and not self.busy:
@@ -282,6 +282,32 @@ class TimelineWidget(QWidget):
         self._preserve_view=None
         if self.bounds and self.bounds.get('last'):self.window.setCurrentIndex(3);self.request(day_start(self.bounds['last']),86400)
     def go_to_date(self):self.request(self.date.date().toString('yyyy-MM-dd')+'T00:00:00',self.window.currentData())
+    def _choose_view_date(self,anchor=None):
+        if self.busy:return
+        anchor=anchor or self.range_label
+        if self.calendar_popup is None:
+            self.calendar_popup=QDialog(self,Qt.WindowType.Popup);self.calendar_popup.setWindowTitle('Elegir fecha')
+            layout=QVBoxLayout(self.calendar_popup);layout.setContentsMargins(8,8,8,8)
+            self.view_calendar=QCalendarWidget();self.view_calendar.setLocale(self.date.locale());self.view_calendar.setFirstDayOfWeek(Qt.DayOfWeek.Monday)
+            self.view_calendar.setMinimumSize(350,300)
+            self.view_calendar.setStyleSheet('QCalendarWidget QWidget#qt_calendar_navigationbar {background:#e8f1f5;} QCalendarWidget QToolButton {color:#20334a;background:transparent;border:none;font-size:11pt;font-weight:600;padding:4px;} QCalendarWidget QToolButton:hover {background:#ffffff;} QCalendarWidget QAbstractItemView {color:#20334a;background:#ffffff;selection-background-color:#087f86;selection-color:#ffffff;font-size:11pt;} QCalendarWidget QMenu,QCalendarWidget QSpinBox {color:#20334a;background:#ffffff;}')
+            self.view_calendar.setVerticalHeaderFormat(QCalendarWidget.VerticalHeaderFormat.NoVerticalHeader);self.view_calendar.setGridVisible(False)
+            layout.addWidget(self.view_calendar);self.view_calendar.clicked.connect(self._calendar_pick);self.view_calendar.activated.connect(self._calendar_pick)
+        selected=self.date.date()
+        if self.current_start is not None:
+            dt=EPOCH+timedelta(seconds=self.current_start);selected=QDate(dt.year,dt.month,dt.day)
+        bounds=(self.bounds or {}).get('device_ranges',{}).get(self.pump.currentData(),self.bounds or {})
+        self.view_calendar.setDateRange(QDate.fromString(str(bounds['first'])[:10],'yyyy-MM-dd') if bounds.get('first') else QDate(1752,9,14),QDate.fromString(str(bounds['last'])[:10],'yyyy-MM-dd') if bounds.get('last') else QDate(9999,12,31))
+        self.view_calendar.setSelectedDate(selected);self.view_calendar.setCurrentPage(selected.year(),selected.month())
+        self.calendar_popup.adjustSize();pos=anchor.mapToGlobal(QPoint(0,anchor.height()+4));screen=self.screen()
+        if screen:
+            area=screen.availableGeometry();pos.setX(max(area.left(),min(pos.x(),area.right()-self.calendar_popup.width())))
+            if pos.y()+self.calendar_popup.height()>area.bottom():pos.setY(max(area.top(),anchor.mapToGlobal(QPoint(0,0)).y()-self.calendar_popup.height()-4))
+        self.calendar_popup.move(pos);self.calendar_popup.show();self.view_calendar.setFocus()
+    def _calendar_pick(self,date):
+        if not self.calendar_popup or not self.calendar_popup.isVisible():return
+        self.calendar_popup.hide();self.date.setDate(date)
+        self.request(date.toString('yyyy-MM-dd')+'T00:00:00',self.current_width or self.window.currentData())
     def shift(self,direction):
         if self.current_start is not None:self.request(self.current_start+direction*self.current_width,self.current_width)
     def follow_mouse(self):self.frozen=False;self.unfreeze.setChecked(False);self.unfreeze.setText('Fijar instante');self.inspector_hint.setText('Valores junto al cursor')
@@ -306,6 +332,7 @@ class TimelineWidget(QWidget):
     def _range_text(self):
         start=EPOCH+timedelta(seconds=self.current_start);end=EPOCH+timedelta(seconds=self.current_start+self.current_width)
         self.range_label.setText(start.strftime('%d/%m/%Y · %H:%M')+'  —  '+end.strftime('%d/%m/%Y · %H:%M'))
+        self.date.setDate(QDate(start.year,start.month,start.day))
         self.range_label.setMinimumWidth(self.range_label.fontMetrics().horizontalAdvance(self.range_label.text())+4)
 
     def render(self,bundle):
@@ -381,7 +408,6 @@ class TimelineWidget(QWidget):
             for a,b,lo,hi,kind in self.basal_regions:
                 if kind==side:path.addRect(QRectF(a,lo,b-a,hi-lo))
             item=QGraphicsPathItem(path);item.setPen(pg.mkPen(None));item.setBrush(pg.mkBrush(color));item.setZValue(-3);self.plots[2].addItem(item,ignoreBounds=True)
-        self.profile_label=pg.TextItem(color='#086c74',anchor=(1,1),fill=(255,255,255,235),border='#8bbfc3');self.profile_label.setFont(QFont('Segoe UI',10));self.plots[2].addItem(self.profile_label,ignoreBounds=True)
         self.basal_zero_line=pg.InfiniteLine(pos=0,angle=0,movable=False,pen=pg.mkPen('#60758b',width=1.3),label='0 U/h',labelOpts={'position':.04,'color':'#60758b','fill':(255,255,255,235)})
         self.basal_zero_line.setZValue(-2);self.plots[2].addItem(self.basal_zero_line,ignoreBounds=True)
         self.plots[2].setYRange(0,max([p['value'] for p in basal]+[p['details']['profile_rate'] for p in basal if isinstance(p.get('details',{}).get('profile_rate'),(int,float))]+[1])*1.15)
@@ -413,7 +439,6 @@ class TimelineWidget(QWidget):
         warnings=data.get('warnings',[])+context.get('warnings',[])
         self.detail.setText('\n'.join(dict.fromkeys(warnings)))
         self.hover_at(bundle['view_start']+bundle['view_width']/2)
-        self._label_profile()
         from .event_hover import message
         entries=[]
         for event in discrete:
@@ -521,6 +546,8 @@ class TimelineWidget(QWidget):
     def _hide_event_popup(self):
         self.event_popup.hide();self._hover_plain=''
     def eventFilter(self,watched,event):
+        if hasattr(self,'date') and watched in (self.date,self.date.lineEdit()) and event.type()==QEvent.Type.MouseButtonPress and event.button()==Qt.MouseButton.LeftButton:
+            self._choose_view_date(self.date);return True
         if hasattr(self,'canvas') and watched is self.canvas.viewport():
             if event.type()==QEvent.Type.Enter:self._pointer_inside=True
             elif event.type() in (QEvent.Type.Leave,QEvent.Type.Hide):
@@ -528,6 +555,7 @@ class TimelineWidget(QWidget):
         return super().eventFilter(watched,event)
     def hideEvent(self,event):
         if hasattr(self,'event_popup'):self._hide_event_popup();self._pointer_inside=False
+        if getattr(self,'calendar_popup',None):self.calendar_popup.hide()
         super().hideEvent(event)
     def _click(self,event):
         if event.button()==Qt.MouseButton.LeftButton and self.bundle:
@@ -609,14 +637,6 @@ class TimelineWidget(QWidget):
         dt=datetime.fromisoformat(point['time']);cursor=EPOCH+timedelta(seconds=x)
         self.time_labels[key].setText(dt.strftime('%H:%M:%S' if dt.date()==cursor.date() else '%d/%m %H:%M:%S'))
         self.values[key].setToolTip(text+'\n'+age)
-    def _label_profile(self):
-        if not hasattr(self,'profile_label') or not self.bundle:return
-        left,right=self.plots[0].viewRange()[0];points=self.point_lists.get('basal',([],[]))[0]
-        candidates=[p for p in points if left<=p['x']<=right and isinstance(p.get('details',{}).get('profile_rate'),(int,float))]
-        if not candidates:self.profile_label.hide();return
-        point=candidates[-1];rate=point['details']['profile_rate']
-        value=f'{rate:.3f}'.rstrip('0').rstrip('.').replace('.',',')
-        self.profile_label.setText('Perfil · '+value+' U/h');self.profile_label.setPos(point['x'],rate);self.profile_label.show()
     def set_value(self,key,text):
         self.observation_times[key]=text;label=self.values[key];parts=text.split('\n');main=parts[0]
         if main=='Sin observación cercana':main='Sin dato cercano'

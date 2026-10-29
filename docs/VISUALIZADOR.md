@@ -1,4 +1,4 @@
-# Visualizador temporal · Tandem Local 0.9.0
+# Visualizador temporal · Tandem Local 0.9.2
 
 La pestaña **Gráfico** abre el último día con lecturas disponibles. Todas las consultas son de lectura y mantienen el reloj de la bomba. No se inicia ninguna descarga por abrir el gráfico.
 
@@ -6,6 +6,7 @@ La pestaña **Gráfico** abre el último día con lecturas disponibles. Todas la
 
 - **Anterior / Siguiente** desplazan una ventana completa.
 - Fecha, duración y **Ver** permiten consultar otro tramo. Duraciones de 3 horas a 7 días; 24 horas por defecto.
+- Pulsar el intervalo de fechas encima del gráfico o el campo de fecha abre un calendario en español. Elegir un día carga desde medianoche con la duración visible; al cancelar no se consulta. La fecha de la barra se sincroniza al desplazar el gráfico.
 - Arrastrar desplaza el eje temporal. La rueda acerca o aleja; al salir del tramo ya cargado se consulta el siguiente.
 - **Último día** vuelve a los datos más recientes. Elegir la bomba y pulsar **Ver** si hay varias.
 - El ratón mueve una guía vertical sobre los cuatro paneles. Un clic fija el instante; **Seguir ratón** libera la selección.
@@ -18,7 +19,7 @@ La pestaña **Gráfico** abre el último día con lecturas disponibles. Todas la
 
 La versión 0.9 añade [secciones plegables de detalle y ampliación de las series](CRONOLOGIA_AMPLIADA.md): origen/desglose de bolos, franjas de extendidos con extremos registrados, comparación basal, sensor/tendencia, eventos del tramo y resumen del periodo PDF. Las alertas identifican los tipos observados y pueden mostrar una lectura MCG anterior de hasta diez minutos, excluyendo cruces de reloj o revisiones ambiguas.
 
-La referencia del perfil basal se dibuja discontinua, con su valor numérico. Azul muestra tasa indicada superior al perfil; ámbar, inferior. Los cambios se dibujan desde su hora registrada hacia la observación siguiente, con cortes en huecos de más de doce minutos y cambios de reloj; se corrige el anterior escalonado hacia la izquierda. Los extremos posteriores no se prolongan al final del día.
+La referencia del perfil basal se dibuja discontinua y su valor permanece en el inspector, sin un recuadro flotante sobre la curva. Azul muestra tasa indicada superior al perfil; ámbar, inferior. Los cambios se dibujan desde su hora registrada hacia la observación siguiente, con cortes en huecos de más de doce minutos y cambios de reloj; se corrige el anterior escalonado hacia la izquierda. Los extremos posteriores no se prolongan al final del día.
 
 Glucosa del sensor y glucemia introducida se distinguen por sus marcadores. Se usa la hora de medición del sensor, conservando por separado la hora de ingreso en el registro. Se prefiere API sobre su copia CSV y no se suma información repetida.
 
@@ -50,4 +51,4 @@ La búsqueda de los últimos bolos/carbohidratos tiene un presupuesto separado d
 
 Si un tramo es demasiado denso, se pide reducirlo o se muestra el aviso de datos limitados. Los huecos no se rellenan ni las dosis se promedian silenciosamente. Las consultas se realizan fuera del hilo de la interfaz y el movimiento del ratón consulta estructuras del tramo cargado, sin acceder a SQLite en cada movimiento.
 
-Validación de esta versión: 282 pruebas correctas. Incluyen conservación de originales, normalización de fases de bolo, fuentes, revisiones, relojes, ventanas, comparación basal, alertas/glucosa sin valores futuros y resúmenes PDF del periodo correcto con límites explícitos. Revisión visual con datos reales en 1420x1000, 1180x820 y escala 200 %. No hay cambios en el esquema ni en las filas originales.
+Validación de esta versión: 285 pruebas correctas. Incluyen conservación de originales, normalización de fases de bolo, fuentes, revisiones, relojes, ventanas, comparación basal, alertas/glucosa sin valores futuros, resúmenes PDF y calendario por fecha visible con selección/cancelación y límites por bomba. Revisión visual en 1420x1000, 1180x820 y escala 200 %. No hay cambios en el esquema ni en las filas originales.

@@ -2,6 +2,8 @@
 
 Desde 0.9.1, el panel basal incluye además una referencia horizontal gris continua rotulada **0 U/h**, visible en toda la anchura al desplazar o ampliar el tramo. La referencia se vuelve a crear al cambiar de ventana y no altera las tasas representadas.
 
+Desde 0.9.2 se retira el recuadro flotante «Perfil · … U/h»: la referencia discontinua y el valor observado del inspector permanecen. Se puede pulsar el intervalo de fechas sobre el gráfico o el campo de fecha de la barra para abrir un calendario en español. Elegir un día carga desde medianoche conservando la duración visible y la bomba seleccionada. Cancelar no inicia ninguna consulta. La fecha de la barra acompaña los desplazamientos del gráfico.
+
 - **Origen del bolo:** pantalla/botón de bomba, algoritmo o Bluetooth cuando está identificado. La leyenda distingue algoritmo y Bluetooth; 0,05 U sigue resaltado en frambuesa.
 - **Desglose del último bolo:** total registrado, solicitudes inmediata/extendida, alimento/corrección, estados de finalización y modificaciones/rechazos del usuario cuando se publican. Las fases se asocian por dispositivo, bolusId y ventana acotada; las asociaciones múltiples se indican. Sus cantidades son componentes y totales de la misma entrega, no dosis independientes que sumar.
 - **Extendidos:** bandas en el panel de insulina solo cuando hay extremos registrados CSV o una pareja única inicio/fin API. La duración solicitada se muestra como solicitud y no se convierte en un intervalo de entrega supuesto. Las diferencias entre fuentes permanecen visibles en la procedencia.

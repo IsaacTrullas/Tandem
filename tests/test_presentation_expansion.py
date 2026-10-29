@@ -57,8 +57,8 @@ class PresentationTests(unittest.TestCase):
     def test_widget_baseline_label_fill_and_sections(self):
         w=TimelineWidget('unused.sqlite');w.resize(1200,820);w.show();APP.processEvents()
         b=bundle();b['data']['basal']=[point(START,.2,profile_rate=.5),point(START+300,.8,profile_rate=.5),point(START+600,.8,profile_rate=.5)]
-        w.current_start=START;w.render(b);APP.processEvents();w._label_profile()
-        self.assertIn('0,5 U/h',w.profile_label.toPlainText());self.assertEqual(len(w.basal_regions),2)
+        w.current_start=START;w.render(b);APP.processEvents()
+        self.assertFalse(hasattr(w,'profile_label'));self.assertEqual(len(w.basal_regions),2)
         self.assertEqual(w.plots[2].listDataItems()[0].opts['stepMode'],'right')
         self.assertEqual(set(w.extra_views),{'bolus','basal','sensor','events','summary'})
         w.debounce.stop();w.close();w.deleteLater();APP.processEvents()
