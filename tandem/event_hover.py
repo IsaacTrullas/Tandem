@@ -2,7 +2,7 @@
 from datetime import datetime,timedelta
 from html import escape
 import math
-from .bolus_display import is_005_bolus,MARKED_BOLUS_LABEL
+from .bolus_display import is_005_bolus,MARKED_BOLUS_LABEL,is_food_bolus,FOOD_BOLUS_LABEL
 from .presentation_details import bolus_lines,sensor_lines,basal_lines
 from .alert_details import alert_details
 
@@ -37,6 +37,7 @@ def message(kind,point):
     title=TITLES.get(kind,details.get('label') or 'Evento')
     if kind=='bg' and details.get('properties',{}).get('cgmCalibration')==1:title='Glucemia usada para calibración'
     if kind=='bolus' and is_005_bolus(point):title=MARKED_BOLUS_LABEL
+    if kind=='bolus' and is_food_bolus(point):title=FOOD_BOLUS_LABEL
     value=details.get('profile_rate') if kind=='basal_profile' else point.get('value')
     if kind=='event' and details.get('event_code')==229:
         value=MODES.get(details.get('properties',{}).get('currentUserMode'))

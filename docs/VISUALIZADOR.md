@@ -1,4 +1,4 @@
-# Visualizador temporal · Tandem Local 0.9.2
+# Visualizador temporal · Tandem Local 0.10.0
 
 La pestaña **Gráfico** abre el último día con lecturas disponibles. Todas las consultas son de lectura y mantienen el reloj de la bomba. No se inicia ninguna descarga por abrir el gráfico.
 
@@ -51,4 +51,4 @@ La búsqueda de los últimos bolos/carbohidratos tiene un presupuesto separado d
 
 Si un tramo es demasiado denso, se pide reducirlo o se muestra el aviso de datos limitados. Los huecos no se rellenan ni las dosis se promedian silenciosamente. Las consultas se realizan fuera del hilo de la interfaz y el movimiento del ratón consulta estructuras del tramo cargado, sin acceder a SQLite en cada movimiento.
 
-Validación de esta versión: 285 pruebas correctas. Incluyen conservación de originales, normalización de fases de bolo, fuentes, revisiones, relojes, ventanas, comparación basal, alertas/glucosa sin valores futuros, resúmenes PDF y calendario por fecha visible con selección/cancelación y límites por bomba. Revisión visual en 1420x1000, 1180x820 y escala 200 %. No hay cambios en el esquema ni en las filas originales.
+Validación de esta versión: 295 pruebas correctas. Incluyen conservación de originales, normalización de fases de bolo, fuentes, revisiones, relojes, ventanas, comparación basal, alertas/glucosa sin valores futuros, resúmenes PDF, calendario por fecha visible con selección/cancelación y límites por bomba, bolos con carbohidratos en naranja y diccionario comprobado contra el esquema. Revisión visual en 1420x1000, 1180x820 y escala 200 %. No hay cambios en el esquema ni en las filas originales.

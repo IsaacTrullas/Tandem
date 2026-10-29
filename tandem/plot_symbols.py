@@ -4,11 +4,11 @@ from PySide6.QtGui import QPainterPath,QPainterPathStroker,QColor,QPixmap,QPaint
 
 COLORS={'glucose':'#159575','bg':'#5473ad','bolus':'#3179cd','bolus_005':'#b9407d','bolus_algorithm':'#087f86','bolus_ble':'#686071','iob':'#9665b2',
         'basal':'#3179cd','profile':'#49a4b2','carbs':'#de9130','sleep':'#5276bb',
-        'exercise':'#b77b24','alert':'#c85765'}
+        'exercise':'#b77b24','alert':'#c85765','bolus_food':'#de9130'}
 
 def symbol(name):
     p=QPainterPath()
-    if name in ('bolus','bolus_005','bolus_algorithm','bolus_ble'):
+    if name in ('bolus','bolus_005','bolus_algorithm','bolus_ble','bolus_food'):
         p.moveTo(0,-.5);p.cubicTo(-.17,-.24,-.4,-.05,-.4,.16)
         p.cubicTo(-.4,.58,.4,.58,.4,.16);p.cubicTo(.4,-.05,.17,-.24,0,-.5);p.closeSubpath()
     elif name=='carbs':

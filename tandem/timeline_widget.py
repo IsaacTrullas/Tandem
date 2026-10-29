@@ -14,7 +14,7 @@ from .pump_context import load_context,context_at
 from .plot_symbols import symbol,icon,COLORS
 from .mode_segments import derive_mode_segments
 from .event_guides import collect_event_times,place_event_labels,EventGuideItem,GUIDE_COLOR
-from .bolus_display import is_005_bolus,MARKED_BOLUS_LABEL
+from .bolus_display import is_005_bolus,MARKED_BOLUS_LABEL,is_food_bolus,FOOD_BOLUS_LABEL
 from .event_hover import format_messages
 from .inspector_values import previous_observation,elapsed_label
 from .presentation_details import bolus_lines,basal_lines,sensor_lines,extended_span,origin
@@ -141,7 +141,7 @@ class TimelineWidget(QWidget):
         tools.addStretch();tools.addWidget(self.pump);tools.addWidget(self.latest);tools.addWidget(self.unfreeze);layout.addWidget(toolbar)
         self.legend=QFrame();self.legend.setObjectName('timelineLegend');legend_layout=FlowLayout(self.legend,0,14,4)
         self.legend_entries=[]
-        for name,label in (('glucose','Glucosa'),('bg','Glucemia introducida'),('bolus','Bolo'),('bolus_algorithm','Bolo algoritmo'),('bolus_ble','Bolo Bluetooth'),('bolus_005','Bolo 0,05 U'),('iob','Insulina activa'),('basal','Basal'),('profile','Perfil programado'),('carbs','Carbohidratos'),('sleep','Sueño'),('exercise','Ejercicio'),('alert','Eventos')):
+        for name,label in (('glucose','Glucosa'),('bg','Glucemia introducida'),('bolus','Bolo'),('bolus_food','Bolo con carbohidratos'),('bolus_algorithm','Bolo algoritmo'),('bolus_ble','Bolo Bluetooth'),('bolus_005','Bolo 0,05 U'),('iob','Insulina activa'),('basal','Basal'),('profile','Perfil programado'),('carbs','Carbohidratos'),('sleep','Sueño'),('exercise','Ejercicio'),('alert','Eventos')):
             chip=QWidget();row=QHBoxLayout(chip);row.setContentsMargins(0,1,0,1);row.setSpacing(6)
             pictogram=QLabel();pictogram.setPixmap(icon(name,22).pixmap(22,22));pictogram.setFixedSize(22,22)
             text=QLabel(label);text.setStyleSheet('font-size:10.5pt;color:#344c65;');row.addWidget(pictogram);row.addWidget(text);legend_layout.addWidget(chip);self.legend_entries.append((name,chip))
@@ -380,8 +380,10 @@ class TimelineWidget(QWidget):
         bg=[p for p in self.point_lists['glucose'][0] if p.get('details',{}).get('kind')=='bg' and p.get('value') is not None]
         if bg:self.plots[0].plot([p['x'] for p in bg],[p['value'] for p in bg],pen=None,symbol=symbol('bg'),symbolSize=12,symbolBrush='#597bb5',symbolPen=None,name='Glucemia introducida')
         boluses=[p for p in self.point_lists['boluses'][0] if p.get('value') is not None]
-        regular=[p for p in boluses if not is_005_bolus(p)]
-        marked=[p for p in boluses if is_005_bolus(p)]
+        food=[p for p in boluses if is_food_bolus(p)]
+        regular=[p for p in boluses if not is_005_bolus(p) and not is_food_bolus(p)]
+        marked=[p for p in boluses if is_005_bolus(p) and not is_food_bolus(p)]
+        if food:self._stems(self.plots[1],food,COLORS['carbs'],FOOD_BOLUS_LABEL,symbol('bolus_food'),z=2)
         for source,color,name in ((7,'#087f86','Bolos del algoritmo'),(8,'#686071','Bolos Bluetooth'),(None,COLORS['bolus'],'Bolos')):
             group=[p for p in regular if (p.get('details',{}).get('properties',{}).get('bolusSource')==source if source is not None else p.get('details',{}).get('properties',{}).get('bolusSource') not in (7,8))]
             if group:self._stems(self.plots[1],group,color,name,symbol('bolus'))
@@ -390,7 +392,7 @@ class TimelineWidget(QWidget):
         if marked:
             self._stems(self.plots[1],marked,COLORS['bolus_005'],MARKED_BOLUS_LABEL,symbol('bolus_005'),marker_size=20,marker_pen=pg.mkPen('white',width=1),z=10)
         self.bolus_ceiling=max([p['value'] for p in boluses+iobs]+[1])*1.2
-        self.has_marked_bolus=bool(marked)
+        self.has_marked_bolus=any(is_005_bolus(p) for p in boluses)
         self._pad_bolus_axis()
         basal=[p for p in self.point_lists['basal'][0] if p.get('value') is not None]
         if basal:
@@ -514,7 +516,7 @@ class TimelineWidget(QWidget):
                     elif kind=='carbs':shape='carbs';size=18
                     elif kind=='glucose' and point.get('details',{}).get('kind')=='bg':shape='bg';size=12
                     if shape and self._hover_paths[shape].contains(QPointF((pos.x()-center.x())/size,(pos.y()-center.y())/size)):
-                        priority=20 if kind=='event' or (kind=='bolus' and is_005_bolus(point)) else 5 if kind!='bolus' else 2
+                        priority=20 if kind=='event' or (kind=='bolus' and (is_005_bolus(point) or is_food_bolus(point))) else 5 if kind!='bolus' else 2
                     elif kind=='iob' and distance<=3:priority=5
                     hits.append((priority,distance,kind,point))
         return [(kind,point) for _,_,kind,point in sorted(hits,key=lambda hit:(-hit[0],hit[1]))]
@@ -571,7 +573,7 @@ class TimelineWidget(QWidget):
         carbs=previous_observation(*self.last_point_lists['carbs'],x)
         marked=is_005_bolus(bolus)
         source=(bolus or {}).get('details',{}).get('properties',{}).get('bolusSource')
-        color=COLORS['bolus_005'] if marked else '#087f86' if source==7 else '#686071' if source==8 else COLORS['bolus']
+        color=COLORS['carbs'] if is_food_bolus(bolus) else COLORS['bolus_005'] if marked else '#087f86' if source==7 else '#686071' if source==8 else COLORS['bolus']
         self.values['bolus'].setStyleSheet('font-size:16pt;font-weight:700;color:'+color+';')
         self.set_value('glucose',self.point_text(glucose))
         self._set_last_value('bolus',bolus,x);self._set_last_value('carbs',carbs,x)

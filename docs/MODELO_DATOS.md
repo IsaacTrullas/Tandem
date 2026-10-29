@@ -1,4 +1,6 @@
-# Modelo de datos, versión 7 / aplicación 0.8 (Qt)
+# Modelo de datos, versión 7 / aplicación 0.10.0 (Qt)
+
+El [diccionario detallado](DICCIONARIO_DATOS.md) enumera cada tabla/columna, claves, unidades, tiempos, códigos API, campos CSV y contratos JSON. Incluye [metadatos JSON](data_dictionary/dictionary.json) y una [guía de lectura para LLM](INTEGRACION_LLM.md). Este documento explica la arquitectura y sus límites.
 
 Todas las tablas y vistas se crean desde `tandem/schema.sql`. SQLite tiene claves foráneas activas y modo WAL. Los tiempos de ejecución son ISO 8601 UTC; los tiempos de tratamiento son texto original del reloj del dispositivo, con `utc_timestamp` nulo hasta una reconstrucción documentada.
 

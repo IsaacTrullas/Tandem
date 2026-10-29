@@ -6,7 +6,7 @@ import math
 import pyqtgraph as pg
 from pyqtgraph.graphicsItems.UIGraphicsItem import UIGraphicsItem
 from PySide6.QtGui import QPainterPath
-from .bolus_display import is_005_bolus, MARKED_BOLUS_LABEL
+from .bolus_display import is_005_bolus, MARKED_BOLUS_LABEL,is_food_bolus,FOOD_BOLUS_LABEL
 
 
 EPOCH = datetime(1970, 1, 1)
@@ -32,7 +32,7 @@ def collect_event_times(data):
 
     for point in data.get('boluses', ()):
         marked = is_005_bolus(point)
-        add(point, MARKED_BOLUS_LABEL if marked else 'Bolo', 4 if marked else 2)
+        add(point, FOOD_BOLUS_LABEL if is_food_bolus(point) else MARKED_BOLUS_LABEL if marked else 'Bolo', 4 if marked or is_food_bolus(point) else 2)
     for point in data.get('carbs', ()):
         add(point, 'Carbohidratos', 4)
     for point in data.get('glucose', ()):

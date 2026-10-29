@@ -64,6 +64,16 @@ class Reader:
         existing = {r[0] for r in self._conn.execute("SELECT name FROM sqlite_master WHERE type IN ('table','view')")}
         return [name for name, (table, _, _) in DATASETS.items() if table in existing]
 
+    def describe(self,dataset=None):
+        """Metadata/meaning only; does not select clinical rows or send anything."""
+        from .data_dictionary import describe
+        return describe(dataset)
+
+    def describe_event(self,event_code):
+        """Catalogued properties/enums/scales, or an explicit unknown result."""
+        from .data_dictionary import describe_event
+        return describe_event(event_code)
+
     def _query(self, dataset, since, until, limit, offset):
         if dataset not in DATASETS:
             raise ValueError('Conjunto de datos no permitido')
@@ -124,6 +134,9 @@ class Reader:
                         'filters': {'since': since, 'until': until},
                         'time_semantics': 'Original device times; no inferred UTC conversion',
                         'source_semantics': 'Source records and evidence; do not sum overlapping sources'}
+            description=self.describe(dataset)
+            metadata['dictionary']={'format':description['format'],'fingerprint':description['fingerprint'],
+                                    'lookup':'Reader.describe(dataset), Reader.describe_event(event_code)'}
             with output.open('x', encoding='utf-8', newline='\n') as stream:
                 created = True
                 stream.write(json.dumps(metadata, ensure_ascii=False) + '\n')

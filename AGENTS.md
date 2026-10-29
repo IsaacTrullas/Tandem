@@ -7,6 +7,7 @@
 - Usar `docs/LEYENDA_PDF.md` y el catálogo completo por documento: 33 elementos diarios y 3 de tendencia. No tratar una leyenda como si fueran eventos del paciente. Distinguir catálogo completo, pasada de candidatos completa y extracción semántica completa; informar de adaptadores parciales y rechazos.
 - La extracción incluye `quantitative_layers`, calibraciones y asociación de bolos extendidos por los dos extremos CSV. No dar por terminado un gráfico con escala sin resolver o un bolo extendido sin asociar; no sumar perfil y barras como dosis independientes. Conservar incertidumbres y casos ambiguos por observación.
 - Mantener originales y procedencia. No corregir silenciosamente relojes, unidades, repeticiones o datos OCR.
+- Mantener `docs/DICCIONARIO_DATOS.md` y `docs/INTEGRACION_LLM.md` como contrato de lectura para otros programas. Si cambia el esquema, un productor o el decodificador, actualizar `tandem/semantic_definitions.py`/`tandem/data_dictionary.py`, regenerar el catálogo y ejecutar `python -m tandem.data_dictionary --check`. No completar campos desconocidos por intuición ni incluir filas clínicas en la documentación generada.
 - No dar por extraídos todos los intervalos/iconos de los PDF. Distinguir archivo completo, extracción estructurada y revisión humana.
 - No guardar secretos en el repositorio ni extraer sesiones del navegador. Acceso caducado significa descarga pendiente.
 - No añadir datos de salud a Git ni publicar. `data/` y todas las copias/bases/documentos están excluidos. No cambiar esas exclusiones para facilitar un commit.

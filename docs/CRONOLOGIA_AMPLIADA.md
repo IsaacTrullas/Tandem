@@ -1,5 +1,7 @@
 # Cronología ampliada · 0.9.0
 
+Desde 0.10.0, los bolos con gramos positivos asociados se pintan en naranja, el mismo color que los carbohidratos. Se utiliza la asociación por bolo conservada en los datos API/CSV; no se inventa una coincidencia por proximidad horaria. La leyenda y el mensaje muestran «Bolo con carbohidratos». Esta categoría de color tiene prioridad sobre origen y marca de 0,05 U; dosis, origen, componentes y horas siguen disponibles en los detalles. Sin gramos asociados confirmados se mantienen los colores anteriores. Una entrada de carbohidratos no acredita hora real de ingesta.
+
 Desde 0.9.1, el panel basal incluye además una referencia horizontal gris continua rotulada **0 U/h**, visible en toda la anchura al desplazar o ampliar el tramo. La referencia se vuelve a crear al cambiar de ventana y no altera las tasas representadas.
 
 Desde 0.9.2 se retira el recuadro flotante «Perfil · … U/h»: la referencia discontinua y el valor observado del inspector permanecen. Se puede pulsar el intervalo de fechas sobre el gráfico o el campo de fecha de la barra para abrir un calendario en español. Elegir un día carga desde medianoche conservando la duración visible y la bomba seleccionada. Cancelar no inicia ninguna consulta. La fecha de la barra acompaña los desplazamientos del gráfico.

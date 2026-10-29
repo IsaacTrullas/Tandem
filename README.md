@@ -2,11 +2,13 @@
 
 Base SQLite creada en `data/tandem.sqlite`. Contiene el histórico descargado de Tandem Source, los originales íntegros dentro de la propia base y tablas para análisis. La aplicación solo escribe en local.
 
-El protocolo operativo está en [docs/PROTOCOLO_SINCRONIZACION.md](docs/PROTOCOLO_SINCRONIZACION.md) y el diccionario en [docs/MODELO_DATOS.md](docs/MODELO_DATOS.md).
+El protocolo operativo está en [docs/PROTOCOLO_SINCRONIZACION.md](docs/PROTOCOLO_SINCRONIZACION.md). El [diccionario completo de datos](docs/DICCIONARIO_DATOS.md) describe cada tabla, columna, código API, unidad y conversión; incluye un catálogo JSON para programas y una [guía de integración con LLM](docs/INTEGRACION_LLM.md). La arquitectura y las limitaciones se explican en [docs/MODELO_DATOS.md](docs/MODELO_DATOS.md).
 
 La [leyenda completa desglosada](docs/LEYENDA_PDF.md) contiene 33 elementos diarios y 3 de tendencia, con su símbolo fuente, dimensiones, unidades, reglas, relación con los CSV y estado de implementación. El atlas visual queda en `data/legend/atlas_leyenda.png`. Los candidatos nuevos se consultan en `legend_symbol_hits`, y la cobertura en `v_legend_coverage`.
 
-## Aplicación 0.9 · Qt
+## Aplicación 0.10.0 · Qt
+
+Los bolos con gramos positivos asociados se representan en naranja, igual que los carbohidratos; la leyenda los identifica como «Bolo con carbohidratos». El origen y el desglose permanecen en los detalles. El SDK incorpora `Reader.describe(dataset)` y `Reader.describe_event(code)`, y las exportaciones JSONL incluyen la huella del diccionario. Validación de esta versión: **295 pruebas correctas**, documentación contrastada con el esquema real en solo lectura; sin cambios en los registros clínicos ni en la cuenta Tandem.
 
 La cronología incorpora [comparación de basal, origen/desglose de bolos, extendidos, sensor, ciclo de alertas, mantenimiento y resúmenes PDF](docs/CRONOLOGIA_AMPLIADA.md). Los datos originales siguen intactos y la carga continúa por ventanas. La cifra siguiente corresponde a la primera verificación; el corte actualizado se consulta en Descargas.
 
