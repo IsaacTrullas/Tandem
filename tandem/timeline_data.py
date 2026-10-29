@@ -13,6 +13,7 @@ import json
 import math
 from pathlib import Path
 import sqlite3
+from .last_events import load_predecessors
 
 MAX_SOURCE_ROWS = 25000
 EPOCH = datetime(1970, 1, 1)
@@ -101,7 +102,8 @@ def load_timeline(dbpath,start,end,pump_serial=None):
     first,last=begin.isoformat(),finish.isoformat()
     result={'start':first,'end':last,'devices':[],'pump_serial':pump_serial,
             'glucose':[],'boluses':[],'carbs':[],'basal':[],'events':[],
-            'clock_changes':[],'warnings':[],'truncated':False,'source_rows_loaded':0}
+            'clock_changes':[],'warnings':[],'truncated':False,'source_rows_loaded':0,
+            'predecessors':{'boluses':[],'carbs':[]},'predecessor_source_rows_loaded':0,'predecessor_truncated':False}
     with closing(_open(dbpath)) as conn:
         conn.execute('BEGIN')
         try:
@@ -153,6 +155,11 @@ def load_timeline(dbpath,start,end,pump_serial=None):
                     WHERE r.pump_serial=? AND r.local_timestamp>=? AND r.local_timestamp<?
                     ORDER BY r.local_timestamp,r.id""",(pump_serial,first,last))
             _build_series(result,cgms,api,csv_glucose,csv_boluses,visible)
+            previous,metrics,previous_warnings=load_predecessors(conn,tables,pump_serial,first)
+            result['predecessors']=previous
+            result['predecessor_source_rows_loaded']=metrics['source_rows_loaded']
+            result['predecessor_truncated']=metrics['truncated']
+            result['warnings'].extend(w for w in previous_warnings if w not in result['warnings'])
             if result['truncated']:result['warnings'].append('Periodo demasiado denso: reduzca el intervalo para consultar todos los puntos. No se ha interpolado ni promediado la información omitida.')
             for key in ('glucose','boluses','carbs','basal','events','clock_changes'):
                 result[key].sort(key=lambda p:(p['x'],str(p['id'])))
@@ -232,7 +239,9 @@ def _build_series(result,cgms,api,csv_glucose,csv_boluses,visible):
             seen_requests.add(rr['id'])
             if _numeric(rp.get('carbAmount')) and rp['carbAmount']>0 and visible(rr['local_timestamp']):
                 result['carbs'].append(_point(rr['local_timestamp'],rp['carbAmount'],'g','api_bolus_request',rr['id'],
-                    {'bolus_id':bid,'timestamp_meaning':'bolus_request_not_actual_meal_time','bolus_event_id':row['id']}))
+                    {'bolus_id':bid,'timestamp_meaning':'bolus_request_not_actual_meal_time','bolus_event_id':row['id'],
+                     'revision_count':rr['revision_count'],
+                     'revision_ids':active_identities[(rr['device_id'],rr['identity_key'])]}))
         result['boluses'].append(_point(stamp,row['value'],'U','api_bolus_completed',row['id'],details))
     # Requests can exist before the completed dose arrives. They remain request
     # inputs, not delivered insulin and not assertions of a meal time.
@@ -241,11 +250,15 @@ def _build_series(result,cgms,api,csv_glucose,csv_boluses,visible):
             grams=props.get('carbAmount');stamp=row['local_timestamp']
             if row['id'] not in seen_requests and stamp and visible(stamp) and _numeric(grams) and grams>0:
                 result['carbs'].append(_point(stamp,grams,'g','api_bolus_request',row['id'],
-                    {'bolus_id':key[1],'timestamp_meaning':'bolus_request_not_actual_meal_time','delivery_confirmation':'not_linked'}))
+                    {'bolus_id':key[1],'timestamp_meaning':'bolus_request_not_actual_meal_time','delivery_confirmation':'not_linked',
+                     'revision_count':row['revision_count'],
+                     'revision_ids':active_identities[(row['device_id'],row['identity_key'])]}))
     for row in csv_boluses:
-        if row['record_id'] in consumed_csv:continue
         details=dict(row);details['timestamp_meaning']='csv_declared_event_time_not_actual_meal_time'
-        if _numeric(row['delivered_units']):result['boluses'].append(_point(row['local_timestamp'],row['delivered_units'],'U','csv_bolus',row['record_id'],details))
+        # A dose already associated with API can still carry the only available
+        # carbohydrate entry. Deduplicate quantities independently.
+        if row['record_id'] not in consumed_csv and _numeric(row['delivered_units']):
+            result['boluses'].append(_point(row['local_timestamp'],row['delivered_units'],'U','csv_bolus',row['record_id'],details))
         grams=row['carbohydrate_grams']
         if _numeric(grams) and grams>0:
             # If an unmatched API request of the same quantity is very near the

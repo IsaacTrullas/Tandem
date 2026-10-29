@@ -24,6 +24,10 @@ Desde 0.8.1, los sucesos discretos se conectan mediante guías verticales tenues
 
 Desde 0.8.2, los bolos registrados de 0,05 U tienen gota frambuesa, borde claro y leyenda propia. El inspector adopta ese color y su rótulo mientras se consulta uno de ellos. El margen bajo el cero protege el pictograma sin desplazar el valor del dato; las marcas negativas de ese margen no se rotulan. No se deduce la intención ni se modifica la dosis almacenada.
 
+Desde 0.8.3, el hover sobre un símbolo abre un mensaje compacto con nombre, cantidad/unidad cuando existe y hora original. La detección considera ambas coordenadas y el símbolo visible; no abre mensajes por compartir solo una hora. El instante fijado permanece estable. Las coincidencias del mismo tipo y hora conservan sus registros separados, y el cuadro reduce el número de entradas si no caben en el área de dibujo. Las bandas muestran su observación real y distinguen final confirmado de borde visible. El hover usa exclusivamente el tramo en memoria.
+
+Desde 0.8.4, las tarjetas de bolo y carbohidratos muestran el último registro hasta el cursor con fecha/hora y antigüedad, incluido el registro anterior a la ventana. Las alertas incorporan descripción del identificador interno y detalles del sensor/reconocimiento. Los parámetros técnicos completos se despliegan en la procedencia y se pueden seleccionar para copiar. La búsqueda del registro anterior permanece acotada y fuera del hilo de widgets.
+
 ## Datos y funcionamiento
 
 La versión mantiene las consultas por ventanas y los límites de memoria. No cambia la base, las unidades, el reloj original ni los registros clínicos. Las configuraciones actuales no se aplican retrospectivamente. El rediseño modifica la presentación y la geometría de los modos, sin convertir observaciones parciales en una historia de ajustes completa.

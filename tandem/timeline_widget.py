@@ -3,18 +3,20 @@ from __future__ import annotations
 from bisect import bisect_left,bisect_right
 from datetime import datetime,timedelta
 from html import escape
-import math
+import math,json
 import pyqtgraph as pg
-from PySide6.QtCore import Qt,QDate,QTimer,QThread,Signal,Slot,QSize,QRect,QPoint,QLocale,QRectF,QPointF
+from PySide6.QtCore import Qt,QDate,QTimer,QThread,Signal,Slot,QSize,QRect,QPoint,QLocale,QRectF,QPointF,QEvent
 from PySide6.QtGui import QFont,QFontMetrics
 from PySide6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QGridLayout,QLabel,QPushButton,QDateEdit,
-    QComboBox,QSplitter,QScrollArea,QGroupBox,QFormLayout,QProgressBar,QFrame,QToolButton,QLayout,QSizePolicy)
+    QComboBox,QSplitter,QScrollArea,QGroupBox,QFormLayout,QProgressBar,QFrame,QToolButton,QLayout,QSizePolicy,QApplication)
 from .timeline_data import load_timeline,timeline_bounds
 from .pump_context import load_context,context_at
 from .plot_symbols import symbol,icon,COLORS
 from .mode_segments import derive_mode_segments
 from .event_guides import collect_event_times,place_event_labels,EventGuideItem,GUIDE_COLOR
 from .bolus_display import is_005_bolus,MARKED_BOLUS_LABEL
+from .event_hover import format_messages
+from .inspector_values import previous_observation,elapsed_label
 
 EPOCH=datetime(1970,1,1)
 def wall(value):return (datetime.fromisoformat(value)-EPOCH).total_seconds()
@@ -147,6 +149,12 @@ class TimelineWidget(QWidget):
         self.alert=QLabel('');self.alert.setWordWrap(True);self.alert.setStyleSheet('background:#fff4db;border:1px solid #ead39a;border-radius:6px;padding:7px;color:#725520;font-size:10pt;');self.alert.hide();layout.addWidget(self.alert)
         split=QSplitter(Qt.Orientation.Horizontal);split.setHandleWidth(9);layout.addWidget(split,1)
         self.canvas=pg.GraphicsLayoutWidget();self.canvas.setBackground('w');split.addWidget(self.canvas);self.plots=[]
+        self.event_popup=QLabel(self.canvas.viewport());self.event_popup.setTextFormat(Qt.TextFormat.RichText);self.event_popup.setWordWrap(True)
+        self.event_popup.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.event_popup.setStyleSheet('QLabel {background:#ffffff;color:#20334a;border:1px solid #bdcedd;border-radius:6px;padding:9px;font-size:10.5pt;}')
+        self.event_popup.hide();self.hover_series=[];self._pointer_inside=False;self._hover_plain=''
+        self._hover_paths={key:symbol(key) for key in ('bolus','alert','bg','carbs')}
+        self.canvas.viewport().installEventFilter(self)
         self.mode_lane=self.canvas.addPlot(row=0,col=0,axisItems={'bottom':WallAxis(orientation='bottom')})
         self.mode_lane.setMaximumHeight(64);self.mode_lane.setMinimumHeight(58);self.mode_lane.setYRange(0,1,padding=0);self.mode_lane.hideAxis('bottom');self.mode_lane.getAxis('left').setWidth(88);self.mode_lane.getAxis('left').setTicks([])
         self.mode_lane.setLabel('left','Modos',**{'color':'#344c65','font-size':'10pt'});self.mode_lane.setMenuEnabled(False);self.mode_lane.getViewBox().setMouseEnabled(x=True,y=False);self.mode_lane.hideButtons()
@@ -177,13 +185,15 @@ class TimelineWidget(QWidget):
         panel=QFrame();panel.setObjectName('timelineInspector');sidebar=QVBoxLayout(panel);sidebar.setContentsMargins(14,12,14,12);sidebar.setSpacing(12)
         self.instant=QLabel('Explora un instante');self.instant.setWordWrap(True);self.instant.setStyleSheet('font-weight:700;font-size:13pt;color:#172b42;');sidebar.addWidget(self.instant)
         self.inspector_hint=QLabel('Mueve el cursor o fija una selección.');self.inspector_hint.setWordWrap(True);self.inspector_hint.setObjectName('muted');sidebar.addWidget(self.inspector_hint)
-        self.values={};self.observation_times={};self.time_labels={};self.metric_captions={}
+        self.values={};self.observation_times={};self.time_labels={};self.metric_captions={};self.age_labels={}
         grid=QGridLayout();grid.setHorizontalSpacing(10);grid.setVerticalSpacing(10)
-        for index,(key,label,pictogram) in enumerate((('glucose','Glucosa','glucose'),('iob','Activa','iob'),('bolus','Bolo cercano','bolus'),('carbs','Carbohidratos','carbs'))):
+        for index,(key,label,pictogram) in enumerate((('glucose','Glucosa','glucose'),('iob','Activa','iob'),('bolus','Último bolo','bolus'),('carbs','Últimos hidratos','carbs'))):
             card=QFrame();card.setObjectName('inspectorMetric');box=QVBoxLayout(card);box.setContentsMargins(10,8,10,8);box.setSpacing(3)
             caption=QLabel(label);caption.setStyleSheet('font-size:10pt;color:#62748a;');box.addWidget(caption);self.metric_captions[key]=caption
             value=QLabel('—');value.setTextFormat(Qt.TextFormat.PlainText);value.setWordWrap(True);value.setStyleSheet('font-size:16pt;font-weight:700;color:'+COLORS[pictogram]+';');box.addWidget(value)
             time_label=QLabel('');time_label.setStyleSheet('font-size:9pt;color:#728398;');box.addWidget(time_label);self.time_labels[key]=time_label
+            if key in ('bolus','carbs'):
+                age=QLabel('');age.setWordWrap(True);age.setStyleSheet('font-size:9pt;color:#62748a;');age.setToolTip('Tiempo transcurrido según el reloj original de la bomba.');box.addWidget(age);self.age_labels[key]=age
             self.values[key]=value;grid.addWidget(card,index//2,index%2)
         sidebar.addLayout(grid)
         settings=QFrame();settings.setObjectName('pumpSettings');form=QVBoxLayout(settings);form.setContentsMargins(0,0,0,0);form.setSpacing(8)
@@ -194,7 +204,9 @@ class TimelineWidget(QWidget):
             value=QLabel('—');value.setTextFormat(Qt.TextFormat.PlainText);value.setWordWrap(True);value.setAlignment(Qt.AlignmentFlag.AlignRight|Qt.AlignmentFlag.AlignVCenter);value.setStyleSheet('font-size:11pt;font-weight:600;color:#233b54;');row.addWidget(value,1);self.values[key]=value;form.addLayout(row)
         sidebar.addWidget(settings)
         self.evidence_toggle=QToolButton();self.evidence_toggle.setText('Ver horas y procedencia');self.evidence_toggle.setCheckable(True);self.evidence_toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly);sidebar.addWidget(self.evidence_toggle)
+        self.evidence_toggle.setToolTip('Incluye la descripción del evento y sus parámetros técnicos originales.')
         self.detail=QLabel('');self.detail.setWordWrap(True);self.detail.setTextFormat(Qt.TextFormat.PlainText);self.detail.setStyleSheet('font-size:9.5pt;color:#62748a;');self.detail.hide();self.evidence_toggle.toggled.connect(self.detail.setVisible);sidebar.addWidget(self.detail)
+        self.detail.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         note=QLabel('Ajustes según la última observación anterior al cursor.');note.setObjectName('muted');note.setWordWrap(True);note.setStyleSheet('font-size:9.5pt;color:#728398;');sidebar.addWidget(note);sidebar.addStretch()
         scroll=QScrollArea();scroll.setWidgetResizable(True);scroll.setWidget(panel);scroll.setMinimumWidth(285);scroll.setMaximumWidth(330);scroll.setFrameShape(QScrollArea.Shape.NoFrame);split.addWidget(scroll);split.setSizes([1000,310])
         self.controls=(self.previous,self.next,self.date,self.window,self.pump,self.go,self.latest)
@@ -204,6 +216,7 @@ class TimelineWidget(QWidget):
             self.initialized=True;self._run(lambda:timeline_bounds(self.database),'bounds')
     def _run(self,work,kind):
         if self.busy:return False
+        self._hide_event_popup()
         self.busy=True;self.busyChanged.emit(True);self.loading.setRange(0,0)
         for c in self.controls:c.setEnabled(False)
         self._result=None;self._error=None;self._kind=kind;self.worker=Loader(work,self)
@@ -272,6 +285,7 @@ class TimelineWidget(QWidget):
         self.bundle=None;self.initialized=False
         if self.isVisible():self.activate()
     def _range_changed(self,*_):
+        self._hide_event_popup()
         if not self._drawing and self.bundle:self.debounce.start();self.mode_relayout.start()
     def _load_view_range(self):
         if not self.bundle:return
@@ -287,6 +301,7 @@ class TimelineWidget(QWidget):
         self.range_label.setMinimumWidth(self.range_label.fontMetrics().horizontalAdvance(self.range_label.text())+4)
 
     def render(self,bundle):
+        self._hide_event_popup();self.hover_series=[]
         self.bundle=bundle;self.frozen=False;self._drawing=True
         for p in self.plots:p.clear()
         self.mode_lane.clear();self.mode_items=[];self.mode_labels=[];self.event_markers=[];self.event_guides=[]
@@ -300,6 +315,14 @@ class TimelineWidget(QWidget):
         self._draw_mode_lane(bundle)
         for key in ('glucose','boluses','carbs','basal','events'):
             points=sorted(data.get(key,[]),key=lambda p:p['x']);self.point_lists[key]=(points,[p['x'] for p in points])
+        self.last_point_lists={}
+        for key in ('boluses','carbs'):
+            points=sorted(data.get('predecessors',{}).get(key,[])+data.get(key,[]),key=lambda p:p['x'])
+            self.last_point_lists[key]=(points,[p['x'] for p in points])
+        for index,key,radius in ((0,'glucose',8),(1,'boluses',12),(2,'basal',6),(3,'carbs',11)):
+            self._register_hover(self.plots[index],{'boluses':'bolus'}.get(key,key),data.get(key,[]),radius)
+        self._register_hover(self.plots[2],'basal_profile',data.get('basal',[]),6)
+        self._register_hover(self.plots[1],'iob',context.get('observed_iob',[]),7)
         glucose=[p for p in self.point_lists['glucose'][0] if p.get('details',{}).get('kind','cgm')=='cgm']
         numeric_glucose=[p for p in glucose if p.get('value') is not None]
         if numeric_glucose:
@@ -353,10 +376,13 @@ class TimelineWidget(QWidget):
             if p is self.mode_lane:guide.setZValue(1)
             p.addItem(guide,ignoreBounds=True);self.event_guides.append(guide)
         self.plots[3].getAxis('bottom').set_events(self.event_times)
-        for e in data.get('events',[]):
-            color='#b77564' if e.get('details',{}).get('kind') in ('alarm','alert','cgm_alert','suspend') else '#4866a1'
+        discrete=sorted(data.get('events',[])+data.get('clock_changes',[]),key=lambda p:p['x'])
+        self._register_hover(self.plots[0],'event',discrete,10)
+        for e in discrete:
+            color='#b38c32' if e.get('details',{}).get('event_code') in (13,14) else '#b77564' if e.get('details',{}).get('kind') in ('alarm','alert','cgm_alert','suspend') else '#4866a1'
             ymin,ymax=self.plots[0].viewRange()[1];pixels=max(80,self.plots[0].getViewBox().sceneBoundingRect().height());inside=ymax-(ymax-ymin)*11/pixels
             mark=pg.ScatterPlotItem([e['x']],[inside],symbol=symbol('alert'),size=13,brush=color,pen=None);self.plots[0].addItem(mark,ignoreBounds=True);self.event_markers.append((mark,e['x']))
+            self.hover_event_y=inside
         self.tooltip=pg.TextItem(anchor=(0,1),color='#173d50',fill=(255,255,255,240),border='#bdcedd');self.tooltip.setFont(QFont('Segoe UI',11));self.plots[0].addItem(self.tooltip,ignoreBounds=True)
         self.plots[0].setXRange(bundle['view_start'],bundle['view_start']+bundle['view_width'],padding=0)
         self._drawing=False;self._range_text();self.mode_relayout.start()
@@ -390,11 +416,84 @@ class TimelineWidget(QWidget):
                 nearest['details']['ambiguous']=True;nearest['details']['alternatives']=sorted(str(v) for v in values);nearest['value']=None
         return nearest
     def _mouse_move(self,event):
-        if self.frozen or self.busy or not self.bundle:return
+        if self.busy or not self.bundle:self._hide_event_popup();return
         pos=event[0]
         for plot in self.plots+[self.mode_lane]:
             vb=plot.getViewBox()
-            if vb.sceneBoundingRect().contains(pos):self.hover_at(vb.mapSceneToView(pos).x());return
+            if vb.sceneBoundingRect().contains(pos):
+                if not self.frozen:self.hover_at(vb.mapSceneToView(pos).x())
+                if self._pointer_inside and QApplication.mouseButtons()==Qt.MouseButton.NoButton:self._show_event_popup(plot,pos)
+                else:self._hide_event_popup()
+                return
+        self._hide_event_popup()
+
+    def _register_hover(self,plot,kind,points,radius):
+        points=sorted(points,key=lambda p:p['x'])
+        self.hover_series.append((plot,kind,points,[p['x'] for p in points],radius))
+    def _hover_hits(self,plot,pos):
+        vb=plot.getViewBox();local=vb.mapSceneToView(pos)
+        if plot is self.mode_lane:
+            if .16<=local.y()<=.88:
+                return [('mode',s) for s in self.mode_segments if s['start']<=local.x()<s['end']]
+            return []
+        left,right=vb.viewRange()[0];tolerance=(right-left)*14/max(1,vb.sceneBoundingRect().width());hits=[]
+        for owner,kind,points,xs,radius in self.hover_series:
+            if owner is not plot:continue
+            for point in points[bisect_left(xs,local.x()-tolerance):bisect_right(xs,local.x()+tolerance)]:
+                value=point.get('details',{}).get('profile_rate') if kind=='basal_profile' else point.get('value')
+                if kind=='event':value=getattr(self,'hover_event_y',None)
+                if kind=='glucose' and value is None:
+                    qualifier=point.get('details',{}).get('qualifier')
+                    if qualifier in ('high','low'):value=vb.viewRange()[1][1 if qualifier=='high' else 0]
+                if not isinstance(value,(int,float)) or not math.isfinite(value):continue
+                center=vb.mapViewToScene(QPointF(point['x'],value));distance=math.hypot(pos.x()-center.x(),pos.y()-center.y())
+                if distance<=radius:
+                    priority=0;shape=None;size=1
+                    if kind=='bolus':shape='bolus';size=20 if is_005_bolus(point) else 18
+                    elif kind=='event':shape='alert';size=13
+                    elif kind=='carbs':shape='carbs';size=18
+                    elif kind=='glucose' and point.get('details',{}).get('kind')=='bg':shape='bg';size=12
+                    if shape and self._hover_paths[shape].contains(QPointF((pos.x()-center.x())/size,(pos.y()-center.y())/size)):
+                        priority=20 if kind=='event' or (kind=='bolus' and is_005_bolus(point)) else 5 if kind!='bolus' else 2
+                    elif kind=='iob' and distance<=3:priority=5
+                    hits.append((priority,distance,kind,point))
+        return [(kind,point) for _,_,kind,point in sorted(hits,key=lambda hit:(-hit[0],hit[1]))]
+    def _show_event_popup(self,plot,pos):
+        hits=self._hover_hits(plot,pos)
+        if not hits:self._hide_event_popup();return
+        # A wide day view can stack many IOB points near a bolus. Identify the
+        # nearest marker, retaining all conflicting records at its exact time.
+        target_kind,target=hits[0]
+        if target_kind!='mode':
+            hits=[(kind,p) for owner,kind,points,xs,radius in self.hover_series
+                  if owner is plot and kind==target_kind
+                  for p in points[bisect_left(xs,target['x']):bisect_right(xs,target['x'])]]
+            hits.sort(key=lambda hit:hit[1] is not target)
+        viewport=self.canvas.viewport();metrics=self.event_popup.fontMetrics()
+        max_height=max(40,viewport.height()-16)
+        for limit in range(min(6,len(hits)),0,-1):
+            html,plain=format_messages(hits,limit);self.event_popup.setText(html)
+            width=min(360,max(180,max((metrics.horizontalAdvance(line) for line in plain.splitlines()),default=0)+24),max(60,viewport.width()-16))
+            self.event_popup.setFixedWidth(width);height=self.event_popup.heightForWidth(width)
+            if height<=max_height:break
+        self._hover_plain=plain;self.event_popup.setAccessibleName(plain)
+        self.event_popup.resize(width,min(height,max_height))
+        cursor=self.canvas.mapFromScene(pos);height=self.event_popup.height()
+        x=cursor.x()+16 if cursor.x()+16+width<viewport.width() else cursor.x()-width-16
+        y=cursor.y()+16 if cursor.y()+16+height<viewport.height() else cursor.y()-height-16
+        self.event_popup.move(max(4,min(x,viewport.width()-width-4)),max(4,min(y,viewport.height()-height-4)))
+        self.tooltip.hide();self.event_popup.show();self.event_popup.raise_()
+    def _hide_event_popup(self):
+        self.event_popup.hide();self._hover_plain=''
+    def eventFilter(self,watched,event):
+        if hasattr(self,'canvas') and watched is self.canvas.viewport():
+            if event.type()==QEvent.Type.Enter:self._pointer_inside=True
+            elif event.type() in (QEvent.Type.Leave,QEvent.Type.Hide):
+                self._pointer_inside=False;self._hide_event_popup()
+        return super().eventFilter(watched,event)
+    def hideEvent(self,event):
+        if hasattr(self,'event_popup'):self._hide_event_popup();self._pointer_inside=False
+        super().hideEvent(event)
     def _click(self,event):
         if event.button()==Qt.MouseButton.LeftButton and self.bundle:
             self.frozen=not self.frozen;self.unfreeze.setChecked(self.frozen);self.unfreeze.setText('Instante fijado' if self.frozen else 'Fijar instante');self.inspector_hint.setText('Instante fijado' if self.frozen else 'Valores junto al cursor')
@@ -405,12 +504,12 @@ class TimelineWidget(QWidget):
         for line in self.crosshairs:line.setPos(x)
         ctx=context_at(self.bundle['context'],stamp);glucose=self.nearest('glucose',x,300)
         tolerance=min(300,max(45,self.current_width/100))
-        bolus=self.nearest('boluses',x,tolerance);carbs=self.nearest('carbs',x,tolerance)
-        marked=is_005_bolus(bolus);bolus_text=self.point_text(bolus)
-        if marked:bolus_text=bolus_text.replace('\n','\n'+MARKED_BOLUS_LABEL+' · resaltado por dosis\n',1)
-        self.metric_captions['bolus'].setText(MARKED_BOLUS_LABEL if marked else 'Bolo cercano')
+        bolus=previous_observation(*self.last_point_lists['boluses'],x)
+        carbs=previous_observation(*self.last_point_lists['carbs'],x)
+        marked=is_005_bolus(bolus)
         self.values['bolus'].setStyleSheet('font-size:16pt;font-weight:700;color:'+COLORS['bolus_005' if marked else 'bolus']+';')
-        self.set_value('glucose',self.point_text(glucose));self.set_value('bolus',bolus_text);self.set_value('carbs',self.point_text(carbs))
+        self.set_value('glucose',self.point_text(glucose))
+        self._set_last_value('bolus',bolus,x);self._set_last_value('carbs',carbs,x)
         for key in ('profile','basal_profile','carb_ratio','sensitivity','target','iob','mode'):
             observation=ctx.get(key) or {};value=observation.get('value');unit=observation.get('unit') or ''
             label='Sin dato confirmado' if value is None else (f'{value:.3f}'.rstrip('0').rstrip('.').replace('.',',') if isinstance(value,(int,float)) else str(value))+' '+unit
@@ -419,17 +518,20 @@ class TimelineWidget(QWidget):
                 label+='\nÚltima lectura: '+str(observation['last_observed_value'])+' U'
             if observation.get('time'):label+='\nObservado '+str(observation['time']).replace('T',' ')
             self.set_value(key,label.strip())
-        # A small label identifies the hovered glucose observation. The other
-        # values stay in the inspector rather than covering the curves.
-        if glucose and glucose.get('value') is not None:
-            self.tooltip.setText(self.point_text(glucose).split('\n')[0]);self.tooltip.setAnchor((1 if x>sum(self.plots[0].viewRange()[0])/2 else 0,1))
-            self.tooltip.setPos(glucose['x'],glucose['value']+7);self.tooltip.show()
-        else:self.tooltip.hide()
+        self.tooltip.hide()
         extra=[]
         for p in (glucose,bolus,carbs):
             if p:extra.append(str(p.get('source',''))+' · '+p['time'])
         event=self.nearest('events',x,tolerance)
         if event:extra.insert(0,event.get('details',{}).get('label','Evento')+' · '+event['time'])
+        if event:
+            from .alert_details import alert_details
+            event_details=event.get('details',{});technical=alert_details(event_details,technical=True)
+            if not technical:
+                technical=['Datos técnicos · evento '+str(event_details.get('event_code','no indicado'))]
+                technical.extend(key+'='+json.dumps(event_details[key],ensure_ascii=False,separators=(',',':'))
+                                 for key in ('properties','labels','state_transitions') if key in event_details)
+            extra.extend(technical)
         warnings=self.bundle['data'].get('warnings',[])+ctx.get('warnings',[])
         details=[]
         for key,label in (('glucose','Glucosa'),('iob','Activa'),('bolus','Bolo'),('carbs','Hidratos'),('profile','Programa'),('basal_profile','Basal'),('carb_ratio','Ratio'),('sensitivity','Sensibilidad'),('target','Objetivo'),('mode','Modo')):
@@ -444,6 +546,23 @@ class TimelineWidget(QWidget):
         critical=self.bundle['data'].get('warnings',[])+[w for w in ctx.get('warnings',[]) if any(word in w.lower() for word in ('reloj','revis','ambigu'))]
         if not (visible_clock or affected_clock or ambiguous_clock):critical=[w for w in critical if 'reloj' not in w.lower()]
         self._set_warnings(critical)
+    def _set_last_value(self,key,point,x):
+        if point is None:
+            self.set_value(key,'Sin registro')
+            self.values[key].setToolTip('No hay un registro anterior disponible hasta este instante.')
+            self.time_labels[key].setText('anterior disponible');self.age_labels[key].setText('');return
+        text=self.point_text(point)
+        if point.get('details',{}).get('ambiguous'):
+            text='Ambiguo\n'+text
+        if key=='bolus' and is_005_bolus(point):text=text.replace('\n','\n'+MARKED_BOLUS_LABEL+' · resaltado por dosis\n',1)
+        clocks=self.bundle['data'].get('clock_changes',[])+self.bundle['context'].get('clock_changes',[])
+        age=elapsed_label(point,x,clocks,self.bundle['context'].get('ambiguous_clock_ranges',[]))
+        if self.bundle['data'].get('truncated') or self.bundle['data'].get('predecessor_truncated'):
+            age='Registro disponible · consulta limitada'
+        self.set_value(key,text);self.age_labels[key].setText(age)
+        dt=datetime.fromisoformat(point['time']);cursor=EPOCH+timedelta(seconds=x)
+        self.time_labels[key].setText(dt.strftime('%H:%M:%S' if dt.date()==cursor.date() else '%d/%m %H:%M:%S'))
+        self.values[key].setToolTip(text+'\n'+age)
     def set_value(self,key,text):
         self.observation_times[key]=text;label=self.values[key];parts=text.split('\n');main=parts[0]
         if main=='Sin observación cercana':main='Sin dato cercano'
@@ -489,6 +608,7 @@ class TimelineWidget(QWidget):
         self.alert.setVisible(bool(critical))
     def resizeEvent(self,event):
         super().resizeEvent(event)
+        if hasattr(self,'event_popup'):self._hide_event_popup()
         if hasattr(self,'mode_relayout') and self.bundle:self.mode_relayout.start()
     def _draw_mode_lane(self,bundle):
         self.mode_lane.setYRange(0,1,padding=0)
@@ -536,6 +656,7 @@ class TimelineWidget(QWidget):
         if not self.event_markers:return
         ymin,ymax=self.plots[0].viewRange()[1];pixels=max(1,self.plots[0].getViewBox().sceneBoundingRect().height())
         inside=ymax-(ymax-ymin)*12/pixels
+        self.hover_event_y=inside
         for item,x in self.event_markers:item.setData([x],[inside])
     @staticmethod
     def point_text(point):
