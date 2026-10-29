@@ -6,11 +6,11 @@ El protocolo operativo está en [docs/PROTOCOLO_SINCRONIZACION.md](docs/PROTOCOL
 
 La [leyenda completa desglosada](docs/LEYENDA_PDF.md) contiene 33 elementos diarios y 3 de tendencia, con su símbolo fuente, dimensiones, unidades, reglas, relación con los CSV y estado de implementación. El atlas visual queda en `data/legend/atlas_leyenda.png`. Los candidatos nuevos se consultan en `legend_symbol_hits`, y la cobertura en `v_legend_coverage`.
 
-## Aplicación 0.7 · Qt
+## Aplicación 0.8 · Qt
 
 Validación real del 29/10/2026: acceso EU correcto, **401.411 eventos API** conservados hasta **29/10/2026 08:05:36**, **66.085 lecturas CSV contrastadas por hora de medición y valor**, cero conflictos. Esquema 7, 96 pruebas correctas. Quedan 36.042 registros de cuatro códigos sin interpretar (9, 22, 23, 52), preservados íntegramente. Las fechas de 2025 permanecen como reloj fuente, sin inferir inicio de tratamiento.
 
-Interfaz nativa **Qt 6 / PySide6**, con [gráfico temporal interactivo](docs/VISUALIZADOR.md), resumen, consulta paginada, exportación e historial de ejecuciones. El gráfico carga por ventanas acotadas e incluye valores al pasar el ratón y parámetros históricos observados. Abrir con `scripts\AbrirAplicacion.ps1`. Incluye recopilación API EU, gestor de credenciales Windows, cruce de fuentes, importación CSV/PDF y SDK de solo lectura con exportación JSONL. [Uso y límites](docs/APLICACION.md). La API está autenticada y comprobada. Los CSV/PDF mantienen su corte del 27/10; la API tiene cobertura posterior.
+Interfaz nativa **Qt 6 / PySide6** con [navegación y diseño revisados](docs/DISENO_GUI.md): cronología principal, carril de sueño/ejercicio, leyenda exterior legible, pictogramas vectoriales, inspector compacto y navegación lateral plegable. Incluye [gráfico temporal interactivo](docs/VISUALIZADOR.md), archivo, consulta paginada, exportación e historial de descargas. El gráfico carga por ventanas acotadas e incluye valores al pasar el ratón y parámetros históricos observados. Abrir con `scripts\AbrirAplicacion.ps1`. Incluye recopilación API EU, gestor de credenciales Windows, cruce de fuentes, importación CSV/PDF y SDK de solo lectura con exportación JSONL. [Uso y límites](docs/APLICACION.md). La API está autenticada y comprobada. Los CSV/PDF mantienen su corte del 27/10; la API tiene cobertura posterior.
 
 ## Estado inicial verificado, 28/10/2026
 

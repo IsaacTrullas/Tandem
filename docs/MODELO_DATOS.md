@@ -1,4 +1,4 @@
-# Modelo de datos, versión 7 / aplicación 0.7 (Qt)
+# Modelo de datos, versión 7 / aplicación 0.8 (Qt)
 
 Todas las tablas y vistas se crean desde `tandem/schema.sql`. SQLite tiene claves foráneas activas y modo WAL. Los tiempos de ejecución son ISO 8601 UTC; los tiempos de tratamiento son texto original del reloj del dispositivo, con `utc_timestamp` nulo hasta una reconstrucción documentada.
 

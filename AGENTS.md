@@ -16,3 +16,5 @@
 - La interfaz gráfica usa Qt 6 / PySide6 por preferencia expresa del usuario. Mantener los servicios independientes de Qt, las credenciales en Windows y las tareas fuera del hilo de widgets.
 
 - El visualizador carga ventanas acotadas (hasta 7 días) y sustituye la anterior; no cargar el histórico completo en memoria. Mantener horas originales, procedencia, parámetros observados y ambigüedades, sin interpolar IOB ni aplicar ajustes actuales al pasado.
+
+- Priorizar la cronología en el diseño: leyenda exterior legible, pictogramas vectoriales, carril rotulado de sueño/ejercicio y ajustes observados con su hora. Revisar capturas de escritorio/compacto/DPI antes de dar por terminados cambios de interfaz. Actualizar datos debe conservar fecha y zoom.

@@ -62,7 +62,7 @@ class QtAppTests(unittest.TestCase):
         with patch.object(QMessageBox,'warning'):
             self.window.start('Descarga',failed,refresh_on_error=True);settle(self.window)
         self.assertIn('Incompleta',self.window.run_summary.text())
-        self.assertIn('authentication_required',self.window.run_summary.text())
+        self.assertIn('Revisa el acceso guardado',self.window.run_summary.text())
         self.assertEqual(self.window.badge.text(),'Archivo local')
     def test_export_uses_current_dataset_and_filters_and_keeps_all_pages(self):
         self.window.refresh();settle(self.window)

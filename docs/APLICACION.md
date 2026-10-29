@@ -1,4 +1,4 @@
-# Tandem Local 0.7 · Qt
+# Tandem Local 0.8 · Qt
 
 Aplicación de Windows con interfaz Qt 6 (PySide6) para conservar y consultar el histórico de Tandem. Base principal: `C:\Repositorios\Tandem\data\tandem.sqlite`, esquema 7.
 
@@ -74,3 +74,7 @@ Versión 0.6: toda la interfaz, incluido el formulario de acceso con Mostrar con
 ## Gráfico temporal
 
 La pestaña Gráfico incluye navegación por fechas, arrastre/zoom, cursor con valores de glucosa, IOB observada, bolos, carbohidratos y contexto de perfil. La carga se limita al tramo visible y su margen; no mantiene el histórico completo en memoria. Véase [VISUALIZADOR.md](VISUALIZADOR.md). Las consultas son de lectura y no alteran la base.
+
+## Rediseño de usabilidad 0.8
+
+La navegación lateral reúne Cronología, Archivo, Explorar datos y Descargas; se pliega en ventanas estrechas. La cronología incorpora un carril de modos rotulado con luna/corredor, leyenda exterior, pictogramas de mayor tamaño y un inspector compacto con unidades diferenciadas. Las fechas de observación continúan visibles. Ver [DISENO_GUI.md](DISENO_GUI.md). Actualizar datos conserva la ventana analizada; Más reciente vuelve explícitamente al último día. La presentación usa coma decimal; los valores fuente y las exportaciones mantienen su formato.
