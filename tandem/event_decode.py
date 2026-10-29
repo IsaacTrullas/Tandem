@@ -7,20 +7,21 @@ No timezone is inferred from the server's estimatedDateTime field.
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import math
 from pathlib import Path
 
-VERSION = '1.0'
+VERSION = '1.1'
 CATALOGUE = json.loads(Path(__file__).with_name('event_codes.json').read_text(encoding='utf-8'))
 EVENT_CODES = CATALOGUE['events']
 
 KINDS = {
-    3:'basal_rate', 4:'alert', 5:'alarm', 6:'malfunction',
+    3:'basal_rate', 4:'alert', 5:'alarm', 6:'malfunction', 8:'alarm_acknowledged',
     11:'suspend', 12:'resume', 13:'clock_change', 14:'clock_change',
     16:'bg', 20:'bolus_completed', 21:'bolus_extended_completed',
-    26:'alert_cleared', 28:'alarm_cleared', 33:'cartridge_fill',
+    26:'alert_cleared', 27:'alert_acknowledged', 28:'alarm_cleared', 33:'cartridge_fill',
+    34:'charging_started', 35:'charging_stopped',
     36:'usb_connected', 37:'usb_disconnected', 48:'carb_entry',
     53:'storage_mode', 55:'bolus_started', 57:'settings', 59:'bolus_extended_started',
     60:'log_corruption', 61:'cannula_fill', 63:'tubing_fill',
@@ -29,12 +30,12 @@ KINDS = {
     99:'device_initialization', 140:'basal_algorithm_status',
     171:'cgm_alert', 172:'cgm_alert_cleared', 191:'device_version',
     203:'device_update_status', 212:'cgm_session_start', 213:'cgm_session_join',
-    214:'cgm_session_stop', 229:'mode_change', 230:'control_mode_change',
+    214:'cgm_session_stop', 219:'cgm_scanner_state', 229:'mode_change', 230:'control_mode_change',
     256:'cgm', 279:'basal_rate', 280:'bolus_delivery', 307:'device_version',
     313:'daily_status', 369:'cgm_alert', 370:'cgm_alert_cleared',
     371:'cgm_alert_acknowledged', 372:'cgm', 394:'cgm_session_join',
     399:'cgm', 404:'cgm_session_start', 405:'cgm_session_stop',
-    406:'cgm_session_join', 447:'cgm_session_stop', 460:'cgm_alert',
+    406:'cgm_session_join', 434:'notification_annunciation', 447:'cgm_session_stop', 460:'cgm_alert',
     461:'cgm_alert_cleared', 477:'cgm_session_join', 480:'cgm',
     486:'cgm_session_stop', 558:'sync_dose_started', 559:'sync_dose_completed',
     562:'daily_status', 563:'daily_status', 564:'temporary_adjustment_end',
@@ -92,6 +93,14 @@ def decode(event: dict) -> dict:
         details['issues'] = issues
         return result
     details['event_name'] = spec['name']
+    if spec.get('classification_status'):
+        details['classification_status'] = spec['classification_status']
+        details['classification_source'] = spec['source']
+        result['decode_status'] = 'classified'
+        if code == 219:
+            details['quantity_meaning'] = 'scanner_state_not_physical_disconnect_or_control_iq_availability'
+        elif code == 434:
+            details['quantity_meaning'] = 'notification_annunciation_not_a_separate_alarm_activation'
     details['labels'] = {}
     details['source_field_units'] = {key:field['source_unit'] for key,field in spec['fields'].items()
                                      if 'source_unit' in field and key in props}
@@ -118,6 +127,14 @@ def decode(event: dict) -> dict:
         if primary: result.update(value=value, unit=unit)
 
     if code in (256,372,399,480):
+        sample_seconds = _integer(props.get('egvTimeStamp'))
+        if sample_seconds is not None and 0 <= sample_seconds <= 0xFFFFFFFF:
+            details['measurement_local_timestamp'] = (datetime(2008,1,1) + timedelta(seconds=sample_seconds)).isoformat()
+            details['timestamp_source'] = 'egvTimeStamp_seconds_since_2008_naive'
+        else:
+            details['measurement_local_timestamp'] = None
+            details['timestamp_source'] = 'unresolved'
+            issues.append('missing_or_invalid_egvTimeStamp')
         status = _integer(props.get('glucoseValueStatus'))
         details['glucose_qualifier'] = {0:'numeric',1:'high',2:'low'}.get(status, 'unresolved')
         if status == 0: measure('currentGlucoseDisplayValue', 'mg/dL', primary=True)

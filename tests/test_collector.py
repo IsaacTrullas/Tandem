@@ -84,4 +84,21 @@ class CollectorTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 with writer_lock(self.path):pass
 
+    def test_cgm_matches_measurement_time_not_log_time(self):
+        from datetime import datetime
+        sample='2026-10-25T02:30:00'
+        seconds=int((datetime.fromisoformat(sample)-datetime(2008,1,1)).total_seconds())
+        e=event();e.update(eventCode=399,pumpDateTime='2026-10-25T02:30:03',eventProperties={
+            'egvTimeStamp':seconds,'currentGlucoseDisplayValue':110,'glucoseValueStatus':0})
+        stream=io.StringIO();w=csv.writer(stream);w.writerow(KINDS['MCG']);w.writerow(['t:slim','123','sensor',sample,'110'])
+        with self.c:ingest_csv(self.c,stream.getvalue().encode(),'c.csv','c.csv',None)
+        self.ingest([e]);links=reconcile(self.c)
+        self.assertEqual(links['same_time_value_candidate'],1)
+        first=self.c.execute('SELECT id FROM source_links').fetchone()[0]
+        reconcile(self.c);self.assertEqual(self.c.execute('SELECT id FROM source_links').fetchone()[0],first)
+        self.assertEqual(self.c.execute('SELECT local_timestamp FROM api_events').fetchone()[0],'2026-10-25T02:30:03')
+        query='SELECT 1 FROM source_links s WHERE NOT EXISTS(SELECT 1 FROM wanted_links w WHERE w.event_id=s.event_id AND w.source_table=s.source_table AND w.source_id=s.source_id AND w.relation=s.relation)'
+        plan=[r[3] for r in self.c.execute('EXPLAIN QUERY PLAN '+query)]
+        self.assertTrue(any('SEARCH w USING' in p for p in plan),plan)
+
 if __name__=='__main__':unittest.main()

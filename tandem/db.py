@@ -25,11 +25,11 @@ def connect(path=DEFAULT_DB):
     conn.execute('PRAGMA journal_mode=WAL')
     installed=conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'").fetchone()
     version=conn.execute('SELECT max(version) FROM schema_version').fetchone()[0] if installed else 0
-    if version and version>6:raise ValueError('Versión de base más reciente que este programa')
-    if not version or version<6:
+    if version and version>7:raise ValueError('Versión de base más reciente que este programa')
+    if not version or version<7:
         conn.executescript(Path(__file__).with_name('schema.sql').read_text(encoding='utf-8'))
         conn.executescript(Path(__file__).with_name('api_schema.sql').read_text(encoding='utf-8'))
-        for v in range(1,7):conn.execute('INSERT OR IGNORE INTO schema_version VALUES(?,?)',(v,now()))
+        for v in range(1,8):conn.execute('INSERT OR IGNORE INTO schema_version VALUES(?,?)',(v,now()))
         conn.commit()
     return conn
 

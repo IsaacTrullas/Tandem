@@ -12,3 +12,7 @@
 - No añadir datos de salud a Git ni publicar. `data/` y todas las copias/bases/documentos están excluidos. No cambiar esas exclusiones para facilitar un commit.
 - Ejecutar las pruebas con datos sintéticos tras cambios del importador y la auditoría después de las cargas reales.
 - Informar por separado de datos importados, corte real, OCR pendiente/revisado y conexión en vivo comprobada.
+
+- La interfaz gráfica usa Qt 6 / PySide6 por preferencia expresa del usuario. Mantener los servicios independientes de Qt, las credenciales en Windows y las tareas fuera del hilo de widgets.
+
+- El visualizador carga ventanas acotadas (hasta 7 días) y sustituye la anterior; no cargar el histórico completo en memoria. Mantener horas originales, procedencia, parámetros observados y ambigüedades, sin interpolar IOB ni aplicar ajustes actuales al pasado.

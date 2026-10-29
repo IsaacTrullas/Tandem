@@ -128,6 +128,30 @@ class SourceClientTests(unittest.TestCase):
         c,s=self.client();c.get_pumper();c._expires=0
         with self.assertRaises(SourceError) as caught:c.get_pump_logs(DEVICE,'2026-10-01','2026-10-01')
         self.assertEqual(caught.exception.code,'session_expired')
+    def test_tls_verification_errors_are_safe_and_not_retried(self):
+        import requests
+        c,s=self.client()
+        with patch.object(s,'request',side_effect=requests.exceptions.SSLError('private certificate details')) as request:
+            with self.assertRaises(SourceError) as caught:c._request('GET',SSO)
+            self.assertEqual(caught.exception.code,'tls_validation_failed')
+            self.assertNotIn('private',str(caught.exception))
+            self.assertEqual(request.call_count,1)
+    def test_system_trust_context_survives_requests_pool_selection(self):
+        import requests,ssl,truststore
+        from tandem.source_client import _make_session
+        session=_make_session()
+        try:
+            self.assertFalse(session.trust_env)
+            adapter=session.get_adapter(SSO)
+            prepared=requests.Request('GET',SSO).prepare()
+            host,options=adapter.build_connection_pool_key_attributes(prepared,True)
+            context=options['ssl_context']
+            self.assertIsInstance(context,truststore.SSLContext)
+            self.assertEqual(context.verify_mode,ssl.CERT_REQUIRED)
+            self.assertTrue(context.check_hostname)
+            self.assertEqual(options['cert_reqs'],'CERT_REQUIRED')
+            with self.assertRaises(SourceError):adapter.build_connection_pool_key_attributes(prepared,False)
+        finally:session.close()
     def test_close_clears_session_and_access_token(self):
         c,s=self.client();c.close();self.assertIsNone(c._token);self.assertIsNone(c._session);self.assertTrue(s.closed)
 

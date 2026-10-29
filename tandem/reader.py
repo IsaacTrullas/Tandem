@@ -13,6 +13,8 @@ from pathlib import Path
 import sqlite3
 
 DATASETS = {
+    'api_measurements': ('v_api_measurements', ('event_id',), ('measurement_local_timestamp',)),
+    'api_state_transitions': ('v_api_state_transitions', ('event_id','state','action'), ('local_timestamp',)),
     'glucose': ('v_glucose', ('id',), ('local_date', 'local_timestamp')),
     'boluses': ('v_boluses', ('id',), ('local_date', 'local_timestamp')),
     'carbohydrates': ('v_carbohydrates', ('id',), ('local_date', 'local_timestamp')),

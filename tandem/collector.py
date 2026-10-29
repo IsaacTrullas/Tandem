@@ -138,14 +138,15 @@ def windows(conn,pump,since=None,until=None):
 def reconcile(conn):
     """Links are evidence, never a destructive merge or duplicate insulin dose."""
     with conn:
-        conn.execute('CREATE TEMP TABLE IF NOT EXISTS wanted_links(event_id,source_table,source_id,relation,PRIMARY KEY(event_id,source_table,source_id,relation))')
+        conn.execute('CREATE TEMP TABLE IF NOT EXISTS wanted_links(event_id INTEGER NOT NULL,source_table TEXT NOT NULL,source_id INTEGER NOT NULL,relation TEXT NOT NULL,PRIMARY KEY(event_id,source_table,source_id,relation))')
         conn.execute('DELETE FROM wanted_links')
         for e in conn.execute('SELECT * FROM api_events WHERE local_timestamp IS NOT NULL'):
             candidates=[]
+            matched_stamp=json.loads(e['values_json']).get('measurement_local_timestamp',e['local_timestamp']) if e['kind']=='cgm' else e['local_timestamp']
             if e['kind'] in ('cgm','bg') and e['unit']=='mg/dL':
                 kind='MCG' if e['kind']=='cgm' else 'GLUCOSA'
                 candidates=conn.execute('''SELECT r.id,g.glucose_mg_dl val FROM records r JOIN glucose_readings g ON g.record_id=r.id
-                  WHERE r.kind=? AND r.pump_serial=? AND r.local_timestamp=?''',(kind,e['pump_serial'],e['local_timestamp'])).fetchall()
+                  WHERE r.kind=? AND r.pump_serial=? AND r.local_timestamp=?''',(kind,e['pump_serial'],matched_stamp)).fetchall()
             # Code280 deliveredTotal is the verified full total. Component boluses stay separate.
             elif e['kind']=='bolus_completed' and e['event_code']==280 and e['unit']=='U':
                 candidates=conn.execute('''SELECT r.id,b.delivered_units val FROM records r JOIN boluses b ON b.record_id=r.id
@@ -154,10 +155,10 @@ def reconcile(conn):
                 equal=e['value'] is not None and r['val'] is not None and abs(e['value']-r['val'])<0.00001
                 relation='same_time_value_candidate' if equal else 'same_time_value_conflict'
                 conn.execute('INSERT OR IGNORE INTO source_links(event_id,source_table,source_id,relation,details_json) VALUES(?,?,?,?,?)',
-                  (e['id'],'records',r['id'],relation,dumps({'api_value':e['value'],'csv_value':r['val'],'candidate_count':len(candidates),'identity_confirmed':False})))
+                  (e['id'],'records',r['id'],relation,dumps({'api_value':e['value'],'csv_value':r['val'],'match_timestamp':matched_stamp,'timestamp_source':'sensor_measurement' if e['kind']=='cgm' else 'pump_log','candidate_count':len(candidates),'identity_confirmed':False})))
                 conn.execute('INSERT OR IGNORE INTO wanted_links VALUES(?,?,?,?)',(e['id'],'records',r['id'],relation))
                 conn.execute('UPDATE source_links SET details_json=? WHERE event_id=? AND source_table=? AND source_id=? AND relation=?',
-                    (dumps({'api_value':e['value'],'csv_value':r['val'],'candidate_count':len(candidates),'identity_confirmed':False}),e['id'],'records',r['id'],relation))
+                    (dumps({'api_value':e['value'],'csv_value':r['val'],'match_timestamp':matched_stamp,'timestamp_source':'sensor_measurement' if e['kind']=='cgm' else 'pump_log','candidate_count':len(candidates),'identity_confirmed':False}),e['id'],'records',r['id'],relation))
             # A document-day link is context only, never a claim that one icon matches one event.
             for panel in conn.execute('SELECT id FROM daily_panels WHERE local_date=?',(e['local_date'],)):
                 conn.execute('INSERT OR IGNORE INTO source_links(event_id,source_table,source_id,relation,details_json) VALUES(?,?,?,?,?)',
@@ -177,6 +178,19 @@ def audit_api(conn):
       'received_windows':conn.execute('SELECT count(*) FROM api_windows').fetchone()[0],
       'pending_receipts':conn.execute("SELECT count(*) FROM api_receipts WHERE status!='complete'").fetchone()[0],
       'cross_source_conflicts':conn.execute("SELECT count(*) FROM source_links WHERE relation='same_time_value_conflict'").fetchone()[0]}
+
+def redecode(conn):
+    """Rebuild versioned interpretations without changing identities or raw evidence."""
+    from .event_decode import decode
+    count=0
+    with conn:
+        for row in conn.execute('SELECT id,raw_json FROM api_events WHERE decoder_version!=?',(DECODER_VERSION,)):
+            d=decode(json.loads(row['raw_json']));stamp=d.get('local_timestamp')
+            conn.execute('''UPDATE api_events SET event_name=?,kind=?,local_timestamp=?,local_date=?,unit=?,value=?,values_json=?,
+              decode_status=?,decoder_version=? WHERE id=?''',(d.get('event_name') or d['values'].get('event_name'),d['kind'],stamp,
+                stamp[:10] if stamp else None,d.get('unit'),d.get('value'),dumps(d['values']),d['decode_status'],DECODER_VERSION,row['id']))
+            count+=1
+    return count
 
 def status_summary(dbpath):
     p=Path(dbpath).resolve()
@@ -222,6 +236,7 @@ def collect(dbpath,since=None,until=None,client=None,delay=1.0):
                     body=client.get_pump_logs(pump['assignmentId'],start,end)
                     imported=ingest_logs(conn,run,body,pump['assignmentId'],pump['serialNumber'],start,end)
                     result['new_events']+=imported['new_events'];result['windows']+=1
+            result['redecoded_events']=redecode(conn)
             result['links']=reconcile(conn);result['audit']=audit_api(conn)
             if result['audit']['payload_hash_errors'] or result['audit']['event_hash_errors'] or result['audit']['events_without_source']:raise RuntimeError('Auditoría API fallida')
             result['status']='complete'

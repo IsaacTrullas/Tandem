@@ -32,3 +32,13 @@ CREATE VIEW IF NOT EXISTS v_api_events AS
 CREATE VIEW IF NOT EXISTS v_source_links AS SELECT * FROM source_links;
 
 CREATE INDEX IF NOT EXISTS records_device_time ON records(pump_serial,local_timestamp,kind);
+
+CREATE INDEX IF NOT EXISTS api_event_sources_event ON api_event_sources(event_id);
+CREATE VIEW IF NOT EXISTS v_api_measurements AS
+SELECT id event_id,device_id,pump_serial,kind,local_timestamp log_local_timestamp,
+ CASE WHEN kind='cgm' THEN json_extract(values_json,'$.measurement_local_timestamp') ELSE local_timestamp END measurement_local_timestamp,
+ unit,value,decode_status,clock_status,decoder_version FROM api_events WHERE kind IN ('cgm','bg');
+CREATE VIEW IF NOT EXISTS v_api_state_transitions AS
+SELECT e.id event_id,e.device_id,e.pump_serial,e.local_timestamp,
+ json_extract(t.value,'$.state') state,json_extract(t.value,'$.action') action,
+ e.decode_status,e.clock_status FROM api_events e,json_each(e.values_json,'$.state_transitions') t;

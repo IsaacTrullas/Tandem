@@ -2411,6 +2411,111 @@
           "source_unit": "mA"
         }
       }
+    },
+    "8": {
+      "name": "LID_ALARM_ACK",
+      "fields": {
+        "alarmId": {}
+      },
+      "source": "pumpX2/AlarmAckHistoryLog.java",
+      "classification_status": "reference_named",
+      "notes": "BFF field names preserved as observed; units/enums not inferred from names."
+    },
+    "27": {
+      "name": "LID_ALERT_ACK",
+      "fields": {
+        "alertId": {},
+        "ackSource": {}
+      },
+      "source": "pumpX2/AlertAckHistoryLog.java",
+      "classification_status": "reference_named",
+      "notes": "BFF field names preserved as observed; units/enums not inferred from names."
+    },
+    "34": {
+      "name": "ChargingStarted",
+      "fields": {
+        "abc": {},
+        "ibc": {},
+        "liPoMV": {
+          "source_unit": "mV"
+        },
+        "batteryTemperature": {},
+        "fullChargeCapacity": {},
+        "remainingChargeCapacity": {},
+        "reservedD12": {},
+        "wombatMotorTemp": {}
+      },
+      "source": "pumpX2/ChargingStartedHistoryLog.java",
+      "classification_status": "provisional_reference",
+      "notes": "BFF field names preserved as observed; units/enums not inferred from names."
+    },
+    "35": {
+      "name": "ChargingStopped",
+      "fields": {
+        "abc": {},
+        "ibc": {},
+        "liPoMV": {
+          "source_unit": "mV"
+        },
+        "batteryTemperature": {},
+        "fullChargeCapacity": {},
+        "remainingChargeCapacity": {},
+        "reservedD12": {},
+        "wombatMotorTemp": {}
+      },
+      "source": "pumpX2/ChargingStoppedHistoryLog.java",
+      "classification_status": "provisional_reference",
+      "notes": "BFF field names preserved as observed; units/enums not inferred from names."
+    },
+    "219": {
+      "name": "CgmStateChangeGx",
+      "fields": {
+        "currentScannerState": {},
+        "previousScannerState": {},
+        "scannerFaultCount": {},
+        "scanningEvent": {},
+        "spareA1": {},
+        "spareA2": {},
+        "spareB5": {},
+        "spareB6": {}
+      },
+      "source": "pumpX2/CgmStateChangeGxHistoryLog.java",
+      "classification_status": "provisional_reference",
+      "notes": "BFF field names preserved as observed; units/enums not inferred from names."
+    },
+    "434": {
+      "name": "AamAnnunciation",
+      "fields": {
+        "aarmType": {},
+        "aarmid": {},
+        "annunPattern": {},
+        "annunVolume": {},
+        "mainPriority": {},
+        "priorityRank": {}
+      },
+      "source": "pumpX2/AamAnnunciationHistoryLog.java",
+      "classification_status": "provisional_reference",
+      "notes": "BFF field names preserved as observed; units/enums not inferred from names."
+    }
+  },
+  "additional_sources": {
+    "pumpX2": {
+      "url": "https://github.com/jwoglom/pumpX2/tree/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/historyLog",
+      "retrieved": "2026-10-29",
+      "license": "MIT License\n\nCopyright (c) 2022 James Woglom \n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n",
+      "files_sha256": {
+        "AlarmAckHistoryLog.java": "9cfc2e64977bcf03dfdab9d439eb759267e1687318b80cd544e87f7fd15dc00a",
+        "AlertAckHistoryLog.java": "7669a0210ec7d34e19751b61b80bb04408703e2867f444ac7225acb9feb96631",
+        "ChargingStartedHistoryLog.java": "6c4f374afaa92479008df7111bd31fd0b81187155f7f99c1549aac3b908fa70c",
+        "ChargingStoppedHistoryLog.java": "c176a942aba029929afc51b3c78ba036284df0b2f6892d970dffec94b6d46885",
+        "CgmStateChangeGxHistoryLog.java": "ceab4bab5c536b889c00d852f8d7dcfe751bef2c455736897b3e5c700eadb6c3",
+        "AamAnnunciationHistoryLog.java": "3e3a9fdef5ba23420f80cc50ac6da83fbe19e4292a7b8158197e395692b03756"
+      }
+    },
+    "cgm_sample_time": {
+      "url": "https://github.com/jwoglom/tconnectsync/blob/master/tconnectsync/sync/tandemsource/process_cgm_reading.py",
+      "method": "ProcessCGMReading.timestamp_for",
+      "meaning": "egvTimeStamp measures sample time as seconds since naive2008-01-01; preserve log pumpDateTime independently"
     }
   }
 }

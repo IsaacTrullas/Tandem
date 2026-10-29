@@ -1,4 +1,5 @@
 import copy
+from datetime import datetime
 import math
 import unittest
 
@@ -44,6 +45,22 @@ class EventDecodeTests(unittest.TestCase):
         self.assertIsNone(high['value'])
         self.assertEqual(high['values']['glucose_qualifier'],'high')
         self.assertIsNone(decode(event(399,currentGlucoseDisplayValue=156))['value'])
+
+    def test_sample_timestamp_preserves_backfill_and_log_time(self):
+        # Synthetic reading is logged five minutes after its sensor time.
+        sample='2026-10-25T02:25:00'
+        seconds=int((datetime.fromisoformat(sample)-datetime(2008,1,1)).total_seconds())
+        raw=event(399,glucoseValueStatus=0,currentGlucoseDisplayValue=156,egvTimeStamp=seconds)
+        got=decode(raw)
+        self.assertEqual(got['local_timestamp'],'2026-10-25T02:30:00')
+        self.assertEqual(got['values']['measurement_local_timestamp'],sample)
+        self.assertEqual(got['values']['timestamp_source'],'egvTimeStamp_seconds_since_2008_naive')
+        self.assertNotIn('Z',got['values']['measurement_local_timestamp'])
+        for invalid in (-1,4294967296,True,'593000000',593000000.5,None):
+            raw['eventProperties']['egvTimeStamp']=invalid
+            got=decode(raw)
+            self.assertIsNone(got['values']['measurement_local_timestamp'])
+            self.assertEqual(got['decode_status'],'partial')
 
     def test_milliunits_rate_is_not_an_insulin_dose(self):
         got=decode(event(279,commandedRate=600,profileBasalRate=540,algorithmRate=700,tempRate=0))
@@ -97,6 +114,23 @@ class EventDecodeTests(unittest.TestCase):
         raw=event(20);raw['eventProperties']=None
         self.assertIsNone(decode(raw)['values']['properties'])
         self.assertEqual(decode(raw)['decode_status'],'partial')
+
+    def test_additional_classifications_do_not_invent_doses_or_states(self):
+        kinds={8:'alarm_acknowledged',27:'alert_acknowledged',34:'charging_started',
+               35:'charging_stopped',219:'cgm_scanner_state',434:'notification_annunciation'}
+        for code,kind in kinds.items():
+            got=decode(event(code,futureField=42))
+            self.assertEqual(got['kind'],kind)
+            self.assertEqual(got['decode_status'],'classified')
+            self.assertIsNone(got['value'])
+            self.assertNotIn('state_transitions',got['values'])
+            self.assertEqual(got['values']['properties'],{'futureField':42})
+            if code in (34,35,219,434):
+                self.assertEqual(got['values']['classification_status'],'provisional_reference')
+        for unverified in (9,22,23,52):
+            got=decode(event(unverified,screenLockEnabled=1))
+            self.assertEqual(got['kind'],'unknown')
+            self.assertEqual(got['decode_status'],'unknown')
 
 
 if __name__=='__main__':unittest.main()

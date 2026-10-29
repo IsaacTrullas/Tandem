@@ -6,9 +6,11 @@ El protocolo operativo está en [docs/PROTOCOLO_SINCRONIZACION.md](docs/PROTOCOL
 
 La [leyenda completa desglosada](docs/LEYENDA_PDF.md) contiene 33 elementos diarios y 3 de tendencia, con su símbolo fuente, dimensiones, unidades, reglas, relación con los CSV y estado de implementación. El atlas visual queda en `data/legend/atlas_leyenda.png`. Los candidatos nuevos se consultan en `legend_symbol_hits`, y la cobertura en `v_legend_coverage`.
 
-## Aplicación 0.5
+## Aplicación 0.7 · Qt
 
-Abrir con `scripts\AbrirAplicacion.ps1`. Incluye recopilación API EU, gestor de credenciales Windows, cruce de fuentes, importación CSV/PDF y SDK de solo lectura con exportación JSONL. [Uso y límites](docs/APLICACION.md). Autenticación real pendiente de configurar el acceso; los datos clínicos existentes no se dan por actualizados.
+Validación real del 29/10/2026: acceso EU correcto, **401.411 eventos API** conservados hasta **29/10/2026 08:05:36**, **66.085 lecturas CSV contrastadas por hora de medición y valor**, cero conflictos. Esquema 7, 96 pruebas correctas. Quedan 36.042 registros de cuatro códigos sin interpretar (9, 22, 23, 52), preservados íntegramente. Las fechas de 2025 permanecen como reloj fuente, sin inferir inicio de tratamiento.
+
+Interfaz nativa **Qt 6 / PySide6**, con [gráfico temporal interactivo](docs/VISUALIZADOR.md), resumen, consulta paginada, exportación e historial de ejecuciones. El gráfico carga por ventanas acotadas e incluye valores al pasar el ratón y parámetros históricos observados. Abrir con `scripts\AbrirAplicacion.ps1`. Incluye recopilación API EU, gestor de credenciales Windows, cruce de fuentes, importación CSV/PDF y SDK de solo lectura con exportación JSONL. [Uso y límites](docs/APLICACION.md). La API está autenticada y comprobada. Los CSV/PDF mantienen su corte del 27/10; la API tiene cobertura posterior.
 
 ## Estado inicial verificado, 28/10/2026
 
@@ -36,7 +38,7 @@ Los estados leídos del gráfico llevan inicio/fin estimados, margen de error, e
 
 Los perfiles son **instantáneas de la última subida**, incluso cuando se pide un informe antiguo. Hay 40 evidencias de perfil (cuatro perfiles repetidos en diez informes), con 210 franjas; no son 40 cambios históricos de tratamiento.
 
-La sesión web caducó durante la comprobación de actualización y el navegador dejó de estar disponible. La conexión y descarga de datos posteriores al 27/10 queda pendiente de acceso. El importador transaccional está probado con archivos reales y pruebas sintéticas. El protocolo de navegador está documentado. Se ha añadido un recopilador API local en la versión 0.5; su conexión real está pendiente de credenciales. No hay tarea recurrente instalada.
+La sesión web caducó durante la comprobación de actualización y el navegador dejó de estar disponible. La descarga de CSV/PDF posteriores al 27/10 sigue pendiente; la API ya aporta datos posteriores. El importador transaccional está probado con archivos reales y pruebas sintéticas. El protocolo de navegador está documentado. Se ha añadido un recopilador API local en la versión 0.5; su conexión real ya ha sido verificada. No hay tarea recurrente instalada.
 
 Validación inicial: reimportación real con cero filas nuevas y auditoría sin errores. Última validación: **47 pruebas superadas**, 141 páginas verificadas, 357 muestras de leyenda y 231 gráficos procesados. Se han calibrado los 230 gráficos con trazas; el restante es un panel vacío por cambio de reloj. Las cinco reglas pendientes ya tienen extracción cuantitativa: 690 capas separadas, 744 anotaciones y los cuatro bolos extendidos asociados a cinco tramos diarios, sin duplicarlos. Auditoría en `data/auditorias/capas_cuantitativas_2026-10-28.json`; copia final en `data/backups/tandem_cuantitativo_2026-10-28.sqlite`. Las copias previas siguen disponibles. Los valores gráficos siguen revisables y llevan método/margen; reglas implementadas no significa validación clínica completa.
 

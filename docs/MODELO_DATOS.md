@@ -1,4 +1,4 @@
-# Modelo de datos, versión 6 / aplicación 0.5
+# Modelo de datos, versión 7 / aplicación 0.7 (Qt)
 
 Todas las tablas y vistas se crean desde `tandem/schema.sql`. SQLite tiene claves foráneas activas y modo WAL. Los tiempos de ejecución son ISO 8601 UTC; los tiempos de tratamiento son texto original del reloj del dispositivo, con `utc_timestamp` nulo hasta una reconstrucción documentada.
 
@@ -87,3 +87,7 @@ Los valores de altura se conservan como estimaciones revisables. Las etiquetas O
 ## Fuente API y consumo
 
 `api_schema.sql` añade respuestas originales, recibos, instantáneas, eventos versionados, procedencia por ordinal, ventanas y relaciones entre fuentes. Las vistas `v_api_events` y `v_source_links` y el SDK `tandem.reader.Reader` sirven a otros programas. Véase [APLICACION.md](APLICACION.md). Las versiones de evento no se reducen silenciosamente a una sola; `revision_count > 1` exige elegir o revisar una versión antes de agregaciones.
+
+Las vistas `v_api_measurements` y `v_api_state_transitions` conservan, respectivamente, la hora de medición separada del ingreso al log y los cambios de estado explícitos. Las mediciones MCG usan el contador `egvTimeStamp` desde 2008 en reloj local sin inferir UTC. El valor original y el método permanecen en `values_json` y `raw_json`.
+
+El visualizador consulta ventanas acotadas mediante `timeline_data.py` y `pump_context.py`, sin persistir ni sobrescribir reconstrucciones. La hora de cursor se expresa con un eje numérico de reloj local, no como UTC inferido. Parámetros y estados llevan su hora de observación y se invalidan ante cambios de perfil/reloj según evidencia.

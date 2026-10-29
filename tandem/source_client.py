@@ -11,6 +11,7 @@ import hashlib
 import hmac
 import json
 import secrets
+import ssl
 import time
 from datetime import date
 from urllib.parse import urlsplit, urljoin, urlencode, parse_qs
@@ -69,17 +70,52 @@ def _allowed(method, url):
     return False
 
 
+def _make_session():
+    """Use operating-system CA trust without modifying Python's global TLS state."""
+    try:
+        import requests
+        import truststore
+    except ImportError:
+        raise SourceError('Instale las dependencias de conexión de la aplicación', code='missing_dependency') from None
+    context = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    context.verify_mode = ssl.CERT_REQUIRED
+    context.check_hostname = True
+    class SystemTrustAdapter(requests.adapters.HTTPAdapter):
+        def init_poolmanager(self, connections, maxsize, block=False, **kwargs):
+            kwargs['ssl_context'] = context
+            return super().init_poolmanager(connections,maxsize,block=block,**kwargs)
+        def build_connection_pool_key_attributes(self, request, verify, cert=None):
+            # Requests >=2.32 can otherwise replace the adapter's context with
+            # its preloaded certifi context at connection selection time.
+            if verify is not True:
+                raise SourceError('La verificación TLS es obligatoria', code='tls_validation_failed')
+            host,options = super().build_connection_pool_key_attributes(request,verify,cert)
+            options['ssl_context'] = context
+            options['cert_reqs'] = 'CERT_REQUIRED'
+            options.pop('ca_certs',None)
+            options.pop('ca_cert_dir',None)
+            return host,options
+    session = requests.Session()
+    session.trust_env = False
+    session.mount('https://',SystemTrustAdapter())
+    return session
+
+
+def _is_tls_error(exc):
+    try:
+        import requests
+        return isinstance(exc,(requests.exceptions.SSLError,ssl.SSLError))
+    except ImportError:
+        return isinstance(exc,ssl.SSLError)
+
+
 class SourceClient:
     """EU only. Call get_pumper before get_pump_logs. No persistent session cache."""
     def __init__(self, email, password, *, session=None, sleeper=time.sleep):
         if not email or not password:
             raise SourceError('Faltan las credenciales de Tandem', code='missing_credentials')
         if session is None:
-            try:
-                import requests
-            except ImportError:
-                raise SourceError('Instale las dependencias de conexión de la aplicación', code='missing_dependency') from None
-            session = requests.Session()
+            session = _make_session()
         self._session = session
         self._session.trust_env = False  # No implicit netrc or proxy credentials.
         self._sleep = sleeper
@@ -127,8 +163,11 @@ class SourceClient:
         for attempt in range(attempts):
             try:
                 response = self._session.request(method, url, headers=headers,
-                    allow_redirects=False, timeout=TIMEOUT, **kwargs)
-            except Exception:
+                    allow_redirects=False, timeout=TIMEOUT, verify=True, **kwargs)
+            except Exception as exc:
+                if _is_tls_error(exc):
+                    raise SourceError('No se pudo verificar el certificado TLS de Tandem con el almacén del sistema',
+                                      code='tls_validation_failed') from None
                 if method == 'GET' and attempt + 1 < attempts:
                     self._sleep(2 ** attempt)
                     continue

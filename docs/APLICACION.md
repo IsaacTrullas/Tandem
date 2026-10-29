@@ -1,6 +1,6 @@
-# Tandem Local 0.5
+# Tandem Local 0.7 · Qt
 
-Aplicación de Windows para conservar y consultar el histórico de Tandem. Base principal: `C:\Repositorios\Tandem\data\tandem.sqlite`, esquema 6.
+Aplicación de Windows con interfaz Qt 6 (PySide6) para conservar y consultar el histórico de Tandem. Base principal: `C:\Repositorios\Tandem\data\tandem.sqlite`, esquema 7.
 
 ## Abrir y actualizar
 
@@ -11,7 +11,9 @@ Ejecutar `scripts\AbrirAplicacion.ps1` desde PowerShell, o `scripts\Tandem.ps1 a
 3. **Importar CSV/PDF** incorpora un manifiesto de descargas con el formato de `PROTOCOLO_SINCRONIZACION.md`, ejecuta OCR/extracción, cruza fuentes, audita y crea copia. La descarga de estos archivos sigue realizándose desde la interfaz oficial; no está automatizada por este botón.
 4. **Exportar para otro programa** crea JSON Lines completo del conjunto elegido. Incluye metadatos de formato, fuente, filtros, versión de esquema y un último registro `complete`. La exportación lee una instantánea coherente y nunca sobrescribe un archivo existente.
 
-Las tareas se ejecutan en segundo plano y la ventana indica su estado. Se evita una segunda actualización simultánea entre instancias de esta aplicación/recopilador. No cerrar la aplicación durante una carga. Las herramientas antiguas de bajo nivel deben ejecutarse sin otra actualización en curso.
+Las pestañas **Resumen**, **Datos y exportación** y **Ejecuciones** muestran el estado, los registros paginados y los últimos intentos. En **Datos y exportación**, seleccionar una fuente, introducir fechas opcionales y pulsar **Ver datos**. **Anterior/Siguiente** recorre páginas de 100 filas; **Exportar JSONL** exporta todos los registros de la selección, no solo la página visible.
+
+Las tareas se ejecutan en hilos Qt y la ventana indica su estado. Se evita una segunda actualización simultánea entre instancias de esta aplicación/recopilador. No cerrar la aplicación durante una carga. Las herramientas antiguas de bajo nivel deben ejecutarse sin otra actualización en curso.
 
 ## Conservación y cruce
 
@@ -24,7 +26,7 @@ Las tareas se ejecutan en segundo plano y la ventana indica su estado. Se evita 
 
 No se suman los registros de distintos formatos como dosis diferentes. Las cantidades CSV siguen disponibles; los valores gráficos mantienen su incertidumbre/revisión. El basal en U/h no se transforma en una dosis U sin una reconstrucción temporal adicional. Los eventos de bolo pueden representar fases o componentes del mismo bolo.
 
-Se interpretan 68 códigos de evento conocidos; los demás quedan preservados como desconocidos. Los campos nuevos también se conservan. El catálogo `event_codes.json` incluye referencia, hashes y licencia de las definiciones de tconnectsync. El cliente de conexión es una implementación local independiente y no ejecuta la sincronización a Nightscout.
+El catálogo interpreta o clasifica 74 códigos de evento conocidos; los demás quedan preservados como desconocidos. Los campos nuevos también se conservan. El catálogo `event_codes.json` incluye referencia, hashes y licencia de las definiciones de tconnectsync. El cliente de conexión es una implementación local independiente y no ejecuta la sincronización a Nightscout.
 
 ## Uso desde programas
 
@@ -53,6 +55,22 @@ También es posible abrir SQLite directamente en modo de lectura desde cualquier
 
 Conector basado en los endpoints EU investigados en https://github.com/jwoglom/tconnectsync. API no documentada oficialmente: puede cambiar. No realiza modificaciones de terapia, cuenta, conexiones o consentimientos. Las únicas peticiones POST son inicio de sesión e intercambio de código OAuth. Tokens/cookies solo en memoria. Si el acceso exige otra interacción, se detiene y registra el fallo.
 
-La conexión real requiere credenciales introducidas en la aplicación. Las pruebas sintéticas no prueban autenticación ni cobertura del histórico de esta cuenta. El estado inicial conserva el corte clínico del 27/10/2026; solo una recopilación real posterior permite ampliarlo. No hay tarea recurrente instalada. Las ejecuciones se lanzan desde la aplicación o CLI.
+La conexión EU real se verificó el 29/10/2026 tras guardar el acceso corregido en la aplicación. Se recopilaron 401.411 eventos. Los CSV/PDF mantienen su corte del 27/10 y la API llega hasta 29/10/2026 08:05:36 según el reloj fuente. No hay tarea recurrente instalada. Las ejecuciones se lanzan desde la aplicación o CLI.
 
 La API solicita todos los tipos que el servidor devuelve, sin filtro de códigos. No se afirma que equivalga a todos los datos que Tandem almacena internamente. Los CSV/PDF y sus evidencias siguen sirviendo para contraste y para información no expuesta por la API. Las fechas `estimatedDateTime` terminadas en Z se conservan como fuente sin tratarlas automáticamente como UTC real.
+
+### Comprobación real de conexión
+
+Acceso EU operativo. HTTPS validado con el almacén de certificados de Windows; no se desactiva TLS. La ejecución 8 terminó completa, incluida una repetición incremental con cero eventos nuevos. Se verificaron 403.641 posiciones de las respuestas originales contra su ordinal, registro y hash, sin discrepancias (antes de la repetición incremental). Toda la ventana de fechas declarada por el servidor está consultada; no equivale a garantizar continuidad intradía.
+
+El catálogo tiene 74 códigos. Quedan 36.042 eventos de códigos 9,22,23,52 sin interpretar; sus propiedades están conservadas. Existen 96 pruebas sintéticas correctas. Se corrigieron índices de auditoría y cruce para evitar consultas cuadráticas con este volumen.
+
+`api_measurements` expone la hora de medición de glucosa separada de la hora de registro de la bomba. `api_state_transitions` expone inicios/finales observados de sueño, ejercicio y suspensión, sin inventar duración cuando falta un extremo. Son 20 conjuntos accesibles por el SDK. El cruce exacto confirmó las 64.703 lecturas MCG y 1.382 entradas de glucosa de los CSV. No fusiona filas fuente ni duplica dosis.
+
+### Migración de la interfaz a Qt
+
+Versión 0.6: toda la interfaz, incluido el formulario de acceso con Mostrar contraseña, usa PySide6. El almacén de Windows sigue usando la misma identidad y no requiere volver a introducir las credenciales existentes. Sin migración de datos: el esquema sigue siendo 7. La importación se coordina desde `tandem/services.py`; el lector, el recopilador y los datos originales mantienen sus contratos. Validación: 114 pruebas correctas; revisión visual a 1180x820 y 940x700; consulta de las 98 mediciones API del 29/10/2026 desde la base real en modo de lectura.
+
+## Gráfico temporal
+
+La pestaña Gráfico incluye navegación por fechas, arrastre/zoom, cursor con valores de glucosa, IOB observada, bolos, carbohidratos y contexto de perfil. La carga se limita al tramo visible y su margen; no mantiene el histórico completo en memoria. Véase [VISUALIZADOR.md](VISUALIZADOR.md). Las consultas son de lectura y no alteran la base.

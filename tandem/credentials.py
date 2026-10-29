@@ -100,36 +100,98 @@ def configure_credentials(gui=False):
     return True
 
 
+def _dialog_class():
+    """Load Qt only when the graphical credential form is used."""
+    from PySide6.QtWidgets import (QCheckBox, QDialog, QDialogButtonBox,
+        QFormLayout, QLabel, QLineEdit, QMessageBox, QVBoxLayout)
+
+    class CredentialDialog(QDialog):
+        def __init__(self, parent=None):
+            super().__init__(parent)
+            self.saved = False
+            self.setWindowTitle('Acceso a Tandem Source Europa')
+            self.setMinimumWidth(430)
+            self.setModal(True)
+            layout = QVBoxLayout(self)
+            layout.setContentsMargins(24, 24, 24, 24)
+            layout.setSpacing(16)
+            title = QLabel('Acceso a Tandem Source', self)
+            title.setObjectName('dialogTitle')
+            layout.addWidget(title)
+            description = QLabel('El acceso se guarda en el almacén seguro de Windows.', self)
+            description.setWordWrap(True)
+            layout.addWidget(description)
+            form = QFormLayout()
+            form.setSpacing(12)
+            self.email_entry = QLineEdit(self)
+            self.email_entry.setObjectName('credentialEmail')
+            self.email_entry.setPlaceholderText('Correo de la cuenta')
+            self.password_entry = QLineEdit(self)
+            self.password_entry.setObjectName('credentialPassword')
+            self.password_entry.setEchoMode(QLineEdit.EchoMode.Password)
+            self.password_entry.setMaxLength(1280)
+            form.addRow('Correo', self.email_entry)
+            form.addRow('Contraseña', self.password_entry)
+            layout.addLayout(form)
+            self.reveal = QCheckBox('Mostrar contraseña', self)
+            self.reveal.setObjectName('revealPassword')
+            self.reveal.toggled.connect(self._toggle_password)
+            layout.addWidget(self.reveal)
+            self.buttons = QDialogButtonBox(
+                QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel,
+                parent=self)
+            self.buttons.button(QDialogButtonBox.StandardButton.Save).setText('Guardar acceso')
+            self.buttons.button(QDialogButtonBox.StandardButton.Save).setObjectName('primaryButton')
+            self.buttons.button(QDialogButtonBox.StandardButton.Cancel).setText('Cancelar')
+            self.buttons.accepted.connect(self.submit)
+            self.buttons.rejected.connect(self.reject)
+            layout.addWidget(self.buttons)
+            self.email_entry.setFocus()
+
+        def _toggle_password(self, visible):
+            self.password_entry.setEchoMode(
+                QLineEdit.EchoMode.Normal if visible else QLineEdit.EchoMode.Password)
+
+        def submit(self):
+            try:
+                save_credentials(self.email_entry.text(), self.password_entry.text())
+            except Exception:
+                # Backend exceptions may include input in future implementations.
+                # Keep the fields for correction, but show only a fixed message.
+                QMessageBox.warning(self, 'No se ha guardado',
+                    'No se pudo guardar el acceso. Comprueba el correo, la contraseña '
+                    'y el acceso al almacén seguro de Windows.')
+                return
+            self.saved = True
+            self.accept()
+
+        def done(self, result):
+            # Covers save, Cancel, Escape and the window close button.
+            self.password_entry.clear()
+            self.reveal.setChecked(False)
+            super().done(result)
+
+    return CredentialDialog
+
+
+def __getattr__(name):
+    if name == 'CredentialDialog':
+        dialog = _dialog_class()
+        globals()[name] = dialog
+        return dialog
+    raise AttributeError(name)
+
+
 def configure_interactive(parent=None):
-    """Modal dialog; call from the Tk main thread. Returns whether saved."""
-    import tkinter as tk
-    from tkinter import ttk,messagebox
-    own_root = parent is None
-    root = tk.Tk() if own_root else parent
-    if own_root: root.withdraw()
-    dialog = tk.Toplevel(root)
-    dialog.title('Acceso a Tandem Source Europa')
-    dialog.resizable(False,False)
-    if not own_root: dialog.transient(root)
-    panel = ttk.Frame(dialog,padding=20);panel.grid()
-    ttk.Label(panel,text='Guardar acceso en el almacén seguro de Windows').grid(row=0,column=0,columnspan=2,pady=(0,14))
-    ttk.Label(panel,text='Correo').grid(row=1,column=0,sticky='w',padx=(0,10))
-    email = ttk.Entry(panel,width=42);email.grid(row=1,column=1,pady=5)
-    ttk.Label(panel,text='Contraseña').grid(row=2,column=0,sticky='w',padx=(0,10))
-    password = ttk.Entry(panel,width=42,show='•');password.grid(row=2,column=1,pady=5)
-    saved = [False]
-    def close():
-        password.delete(0,tk.END)
-        dialog.destroy()
-    def submit():
-        try:save_credentials(email.get(),password.get())
-        except CredentialError as exc:
-            messagebox.showerror('No se ha guardado',str(exc),parent=dialog);return
-        saved[0] = True
-        close()
-    ttk.Button(panel,text='Cancelar',command=close).grid(row=3,column=0,pady=(15,0))
-    ttk.Button(panel,text='Guardar acceso',command=submit).grid(row=3,column=1,sticky='e',pady=(15,0))
-    dialog.protocol('WM_DELETE_WINDOW',close)
-    email.focus_set();dialog.grab_set();root.wait_window(dialog)
-    if own_root:root.destroy()
-    return saved[0]
+    """Qt modal form; call from the application's main thread."""
+    from PySide6.QtWidgets import QApplication, QDialog
+    global _qt_application
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication([])
+        _qt_application = app  # Keep the application alive for standalone usage.
+    elif not isinstance(app, QApplication):
+        raise CredentialError('La aplicación gráfica de Qt no está disponible')
+    dialog_type = globals().get('CredentialDialog') or __getattr__('CredentialDialog')
+    dialog = dialog_type(parent)
+    return dialog.exec() == QDialog.DialogCode.Accepted and dialog.saved

@@ -2,7 +2,7 @@
 
 ## Recopilador API añadido en 0.5
 
-La aplicación también ejecuta `collect` para la API EU: credenciales en Windows, consulta de todas las bombas, archivo de respuestas sin filtro de eventos, ventanas de hasta 28 días, reanudación, cruce y copias. Véase [APLICACION.md](APLICACION.md). Este canal tiene su propia cobertura en `api_windows`; nunca sustituye el estado de pares CSV/PDF descrito abajo. El acceso real está pendiente hasta configurar credenciales.
+La aplicación también ejecuta `collect` para la API EU: credenciales en Windows, consulta de todas las bombas, archivo de respuestas sin filtro de eventos, ventanas de hasta 28 días, reanudación, cruce y copias. Véase [APLICACION.md](APLICACION.md). Este canal tiene su propia cobertura en `api_windows`; nunca sustituye el estado de pares CSV/PDF descrito abajo. El acceso EU real y la recopilación histórica se verificaron el 29/10/2026.
 
 ## Alcance operativo
 
@@ -124,4 +124,4 @@ Tras una interrupción, comprobar primero `sync_runs`, `import_runs`, estado OCR
 
 ## Programación futura
 
-Este documento y los comandos permiten ejecutar siempre el mismo procedimiento con el agente. No hay un proceso de navegador autónomo, credenciales persistidas por este código ni una automatización recurrente creada. Una programación futura deberá ejecutar este protocolo, conservar el registro y avisar solo de novedades/fallo/acceso requerido; la sesión puede caducar y necesitar intervención del usuario. No afirmar que la programación funciona hasta verificar una ejecución real conectada de extremo a extremo.
+La versión 0.5 añade un recopilador API ejecutable desde aplicación o CLI y acceso persistido en Windows Credential Manager. No hay un proceso de navegador autónomo ni una tarea recurrente instalada. Una programación futura deberá ejecutar el recopilador bajo el mismo usuario Windows, conservar el registro y avisar solo ante novedades/fallos/acceso requerido. No afirmar que funciona de extremo a extremo hasta verificar una ejecución real autenticada.
