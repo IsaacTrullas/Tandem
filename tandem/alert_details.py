@@ -12,9 +12,24 @@ import json
 from .event_decode import EVENT_CODES
 
 
-ALERT_FIELDS = {4: 'alertId', 5: 'alarmId', 369: 'dalertId', 371: 'dalertId'}
+ALERT_FIELDS = {4:'alertId',5:'alarmId',8:'alarmId',26:'alertId',27:'alertId',28:'alarmId',369:'dalertId',370:'dalertId',371:'dalertId'}
 SUPPORTED_CODES = frozenset((*ALERT_FIELDS, 230))
 DESCRIPTIONS = {
+    'aaAlert_TZ_HYPER_LIGHT':'Control-IQ: alerta de glucosa alta (50)',
+    'aaAlert_TZ_HYPO_LIGHT':'Control-IQ: predicción de glucosa baja (51)',
+    'Alert_CGM_USER_HIGH_EGV':'Sensor: alerta de glucosa alta configurada',
+    'Alert_CGM_USER_LOW_EGV':'Sensor: alerta de glucosa baja configurada',
+    'Alert_CGM_OUT_OF_RANGE':'Sensor fuera de alcance',
+    'Alert_CGM_GRACE_PERIOD_START':'Inicio del periodo de gracia del sensor',
+    'Alert_CGM_GRACE_PERIOD_EXPIRING_SOON':'Periodo de gracia del sensor próximo a terminar',
+    'oaAlert_LIQ_LOW':'Nivel de insulina bajo',
+    'oaAlert_INCOMPLETE_BOLUS':'Bolo incompleto',
+    'oaAlert_INCOMPLETE_CARTRIDGE':'Carga de cartucho incompleta',
+    'oaAlert_INCOMPLETE_TUBING':'Llenado de tubo incompleto',
+    'oaAlert_NVM':'Aviso NVM: significado específico no documentado',
+    'aaAlert_MH_PAIRED':'Emparejamiento MH registrado: sigla sin interpretar',
+    'Alarm_TEMPERATURE_OOR':'Temperatura fuera de intervalo',
+    'Alarm_STATE_SUSPEND':'Estado de suspensión',
     'aaAlert_CGM_NO_READINGS': 'Falta de lecturas del sensor',
     'Alert_CGM_CALIB_ERROR': 'Error de calibración',
     'Alert_CGM_CALIBRATION_REQUEST': 'Solicitud de calibración',
@@ -88,6 +103,11 @@ def _alert_lines(code, properties, labels):
     else:
         heading = 'Sin descripción disponible'
     lines = [heading, _identifier(field, properties, label)]
+    if label=='aaAlert_TZ_HYPER_LIGHT':lines.append('Definición de Tandem: >200 mg/dL, con insulina aumentada y sin descenso previsto en 30 min.')
+    if label=='aaAlert_TZ_HYPO_LIGHT':lines.append('Definición de Tandem: predicción a 15 min; puede avisar antes de que la lectura sea baja.')
+    if code in (8,26,27,28,370):
+        lines.append(('Reconocimiento registrado' if code in (8,27) else 'Desactivación registrada')+' · evento '+str(code))
+        return lines
     if code == 371:
         raw_ack, ack_label, ack_conflict = _enum(code, 'ackSource', properties, labels)
         acknowledgement = (ACKNOWLEDGEMENTS.get(ack_label)

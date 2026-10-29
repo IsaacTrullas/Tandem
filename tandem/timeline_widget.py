@@ -6,9 +6,9 @@ from html import escape
 import math,json
 import pyqtgraph as pg
 from PySide6.QtCore import Qt,QDate,QTimer,QThread,Signal,Slot,QSize,QRect,QPoint,QLocale,QRectF,QPointF,QEvent
-from PySide6.QtGui import QFont,QFontMetrics
+from PySide6.QtGui import QFont,QFontMetrics,QPainterPath
 from PySide6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QGridLayout,QLabel,QPushButton,QDateEdit,
-    QComboBox,QSplitter,QScrollArea,QGroupBox,QFormLayout,QProgressBar,QFrame,QToolButton,QLayout,QSizePolicy,QApplication)
+    QComboBox,QSplitter,QScrollArea,QGroupBox,QFormLayout,QProgressBar,QFrame,QToolButton,QLayout,QSizePolicy,QApplication,QGraphicsPathItem)
 from .timeline_data import load_timeline,timeline_bounds
 from .pump_context import load_context,context_at
 from .plot_symbols import symbol,icon,COLORS
@@ -17,6 +17,8 @@ from .event_guides import collect_event_times,place_event_labels,EventGuideItem,
 from .bolus_display import is_005_bolus,MARKED_BOLUS_LABEL
 from .event_hover import format_messages
 from .inspector_values import previous_observation,elapsed_label
+from .presentation_details import bolus_lines,basal_lines,sensor_lines,extended_span,origin
+from .basal_comparison import regions
 
 EPOCH=datetime(1970,1,1)
 def wall(value):return (datetime.fromisoformat(value)-EPOCH).total_seconds()
@@ -138,11 +140,12 @@ class TimelineWidget(QWidget):
         tools.addStretch();tools.addWidget(self.pump);tools.addWidget(self.latest);tools.addWidget(self.unfreeze);layout.addWidget(toolbar)
         self.legend=QFrame();self.legend.setObjectName('timelineLegend');legend_layout=FlowLayout(self.legend,0,14,4)
         self.legend_entries=[]
-        for name,label in (('glucose','Glucosa'),('bg','Glucemia introducida'),('bolus','Bolo'),('bolus_005','Bolo 0,05 U'),('iob','Insulina activa'),('basal','Basal'),('profile','Perfil programado'),('carbs','Carbohidratos'),('sleep','Sueño'),('exercise','Ejercicio'),('alert','Eventos')):
+        for name,label in (('glucose','Glucosa'),('bg','Glucemia introducida'),('bolus','Bolo'),('bolus_algorithm','Bolo algoritmo'),('bolus_ble','Bolo Bluetooth'),('bolus_005','Bolo 0,05 U'),('iob','Insulina activa'),('basal','Basal'),('profile','Perfil programado'),('carbs','Carbohidratos'),('sleep','Sueño'),('exercise','Ejercicio'),('alert','Eventos')):
             chip=QWidget();row=QHBoxLayout(chip);row.setContentsMargins(0,1,0,1);row.setSpacing(6)
             pictogram=QLabel();pictogram.setPixmap(icon(name,22).pixmap(22,22));pictogram.setFixedSize(22,22)
             text=QLabel(label);text.setStyleSheet('font-size:10.5pt;color:#344c65;');row.addWidget(pictogram);row.addWidget(text);legend_layout.addWidget(chip);self.legend_entries.append((name,chip))
         layout.addWidget(self.legend)
+        basal_hint=QLabel('Basal: azul sobre el perfil · ámbar bajo el perfil · referencia discontinua');basal_hint.setStyleSheet('color:#62748a;font-size:9.5pt;');layout.addWidget(basal_hint)
         info=QHBoxLayout();self.range_label=QLabel('Elige un día para explorar el histórico.');self.range_label.setObjectName('muted');self.range_label.setMinimumWidth(305);info.addWidget(self.range_label);info.addStretch()
         hint=QLabel('Arrastrar: mover  ·  Rueda: zoom  ·  Clic: fijar');hint.setObjectName('muted');info.addWidget(hint);layout.addLayout(info)
         self.loading=QProgressBar();self.loading.setTextVisible(False);self.loading.setFixedHeight(3);self.loading.setRange(0,1);self.loading.setValue(0);layout.addWidget(self.loading)
@@ -182,6 +185,7 @@ class TimelineWidget(QWidget):
         self.debounce=QTimer(self);self.debounce.setSingleShot(True);self.debounce.setInterval(350);self.debounce.timeout.connect(self._load_view_range)
         self.mode_relayout=QTimer(self);self.mode_relayout.setSingleShot(True);self.mode_relayout.setInterval(65);self.mode_relayout.timeout.connect(self._layout_mode_labels);self.mode_relayout.timeout.connect(self._position_event_markers)
         self.mode_relayout.timeout.connect(self._pad_bolus_axis)
+        self.mode_relayout.timeout.connect(self._label_profile)
         panel=QFrame();panel.setObjectName('timelineInspector');sidebar=QVBoxLayout(panel);sidebar.setContentsMargins(14,12,14,12);sidebar.setSpacing(12)
         self.instant=QLabel('Explora un instante');self.instant.setWordWrap(True);self.instant.setStyleSheet('font-weight:700;font-size:13pt;color:#172b42;');sidebar.addWidget(self.instant)
         self.inspector_hint=QLabel('Mueve el cursor o fija una selección.');self.inspector_hint.setWordWrap(True);self.inspector_hint.setObjectName('muted');sidebar.addWidget(self.inspector_hint)
@@ -203,6 +207,10 @@ class TimelineWidget(QWidget):
             caption=QLabel(label);caption.setStyleSheet('font-size:10pt;color:#62748a;');row.addWidget(caption)
             value=QLabel('—');value.setTextFormat(Qt.TextFormat.PlainText);value.setWordWrap(True);value.setAlignment(Qt.AlignmentFlag.AlignRight|Qt.AlignmentFlag.AlignVCenter);value.setStyleSheet('font-size:11pt;font-weight:600;color:#233b54;');row.addWidget(value,1);self.values[key]=value;form.addLayout(row)
         sidebar.addWidget(settings)
+        self.extra_views={}
+        for key,title in (('bolus','Desglose del último bolo'),('basal','Comparación de basal'),('sensor','Sensor y tendencia'),('events','Eventos del tramo'),('summary','Resumen del informe PDF')):
+            toggle=QToolButton();toggle.setText(title);toggle.setCheckable(True);toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly);sidebar.addWidget(toggle)
+            content=QLabel('');content.setWordWrap(True);content.setTextFormat(Qt.TextFormat.PlainText);content.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse);content.setStyleSheet('font-size:10pt;color:#344c65;padding:4px;');content.hide();toggle.toggled.connect(content.setVisible);sidebar.addWidget(content);self.extra_views[key]=content
         self.evidence_toggle=QToolButton();self.evidence_toggle.setText('Ver horas y procedencia');self.evidence_toggle.setCheckable(True);self.evidence_toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly);sidebar.addWidget(self.evidence_toggle)
         self.evidence_toggle.setToolTip('Incluye la descripción del evento y sus parámetros técnicos originales.')
         self.detail=QLabel('');self.detail.setWordWrap(True);self.detail.setTextFormat(Qt.TextFormat.PlainText);self.detail.setStyleSheet('font-size:9.5pt;color:#62748a;');self.detail.hide();self.evidence_toggle.toggled.connect(self.detail.setVisible);sidebar.addWidget(self.detail)
@@ -347,7 +355,9 @@ class TimelineWidget(QWidget):
         boluses=[p for p in self.point_lists['boluses'][0] if p.get('value') is not None]
         regular=[p for p in boluses if not is_005_bolus(p)]
         marked=[p for p in boluses if is_005_bolus(p)]
-        if regular:self._stems(self.plots[1],regular,COLORS['bolus'],'Bolos',symbol('bolus'))
+        for source,color,name in ((7,'#087f86','Bolos del algoritmo'),(8,'#686071','Bolos Bluetooth'),(None,COLORS['bolus'],'Bolos')):
+            group=[p for p in regular if (p.get('details',{}).get('properties',{}).get('bolusSource')==source if source is not None else p.get('details',{}).get('properties',{}).get('bolusSource') not in (7,8))]
+            if group:self._stems(self.plots[1],group,color,name,symbol('bolus'))
         iobs=[p for p in context.get('observed_iob',[]) if p.get('value') is not None]
         if iobs:self.plots[1].plot([p['x'] for p in iobs],[p['value'] for p in iobs],pen=None,symbol='o',symbolSize=6,symbolPen=None,symbolBrush=COLORS['iob'],name='Activa observada')
         if marked:
@@ -363,9 +373,23 @@ class TimelineWidget(QWidget):
                 if previous is not None and (p['x']-previous>720 or p['x']<=previous or boundary):bx.append(float('nan'));by.append(float('nan'));profile.append(float('nan'))
                 rate=p.get('details',{}).get('profile_rate')
                 bx.append(p['x']);by.append(p['value']);profile.append(rate if rate is not None else float('nan'));previous=p['x']
-            self.plots[2].plot(bx,by,pen=pg.mkPen('#2876b8',width=1.8),stepMode='left',name='Tasa indicada')
-            self.plots[2].plot(bx,profile,pen=pg.mkPen('#5cabb5',width=1,style=Qt.PenStyle.DashLine),stepMode='left',name='Perfil observado')
-        self.plots[2].setYRange(0,max([p['value'] for p in basal]+[1])*1.15)
+            self.plots[2].plot(bx,by,pen=pg.mkPen('#2876b8',width=1.8),stepMode='right',name='Tasa indicada')
+            self.plots[2].plot(bx,profile,pen=pg.mkPen('#087f86',width=2.2,style=Qt.PenStyle.DashLine),stepMode='right',name='Perfil observado')
+        self.basal_regions=regions(basal,data.get('clock_changes',[]))
+        for side,color in (('above',(49,121,205,45)),('below',(222,145,48,60))):
+            path=QPainterPath()
+            for a,b,lo,hi,kind in self.basal_regions:
+                if kind==side:path.addRect(QRectF(a,lo,b-a,hi-lo))
+            item=QGraphicsPathItem(path);item.setPen(pg.mkPen(None));item.setBrush(pg.mkBrush(color));item.setZValue(-3);self.plots[2].addItem(item,ignoreBounds=True)
+        self.profile_label=pg.TextItem(color='#086c74',anchor=(1,1),fill=(255,255,255,235),border='#8bbfc3');self.profile_label.setFont(QFont('Segoe UI',10));self.plots[2].addItem(self.profile_label,ignoreBounds=True)
+        self.basal_zero_line=pg.InfiniteLine(pos=0,angle=0,movable=False,pen=pg.mkPen('#60758b',width=1.3),label='0 U/h',labelOpts={'position':.04,'color':'#60758b','fill':(255,255,255,235)})
+        self.basal_zero_line.setZValue(-2);self.plots[2].addItem(self.basal_zero_line,ignoreBounds=True)
+        self.plots[2].setYRange(0,max([p['value'] for p in basal]+[p['details']['profile_rate'] for p in basal if isinstance(p.get('details',{}).get('profile_rate'),(int,float))]+[1])*1.15)
+        self.extended_intervals=[]
+        for p in boluses:
+            span=extended_span(p)
+            if span:
+                a,b=map(wall,span);band=pg.LinearRegionItem((a,b),movable=False,brush=(150,101,178,22),pen=pg.mkPen('#9665b2',style=Qt.PenStyle.DotLine));band.setZValue(-4);self.plots[1].addItem(band,ignoreBounds=True);self.extended_intervals.append((a,b))
         carbs=[p for p in self.point_lists['carbs'][0] if p.get('value') is not None]
         if carbs:self._stems(self.plots[3],carbs,COLORS['carbs'],'Carbohidratos',symbol('carbs'))
         self.plots[3].setYRange(0,max([p['value'] for p in carbs]+[20])*1.2)
@@ -389,6 +413,17 @@ class TimelineWidget(QWidget):
         warnings=data.get('warnings',[])+context.get('warnings',[])
         self.detail.setText('\n'.join(dict.fromkeys(warnings)))
         self.hover_at(bundle['view_start']+bundle['view_width']/2)
+        self._label_profile()
+        from .event_hover import message
+        entries=[]
+        for event in discrete:
+            if bundle['view_start']<=event['x']<bundle['view_start']+bundle['view_width']:
+                title,body=message('event',event);entries.append(title+' · '+' · '.join(body))
+        self.extra_views['events'].setText('\n\n'.join(entries[:200])+('\nLista limitada a 200 eventos; reduce la ventana.' if len(entries)>200 else ''))
+        summary=data.get('pdf_summary',{})
+        self.extra_views['summary'].setText((summary.get('filename','')+'\nPeriodo del informe: '+str(summary.get('start'))+' → '+str(summary.get('end'))+'\n'+ '\n'.join(f"{f['section']} · {f['label']}: {f['value']} [p.{f['page']} · {f['review_status']}]" for f in summary.get('fields',[]))+ ('\nResumen limitado; consultar Explorar datos.' if summary.get('limited') else '')) if summary else 'No hay resumen PDF cuyo periodo incluya este tramo. No se aplica un resumen de otro periodo.')
+        if summary.get('metrics'):
+            self.extra_views['summary'].setText(self.extra_views['summary'].text()+'\n\nMétricas extraídas del PDF:\n'+'\n'.join(f"{m['key']} ({m['qualifier']}): {m['value']} {m['unit']} [p.{m['page']} · {m['review_status']}]" for m in summary['metrics']))
 
     @staticmethod
     def _stems(plot,points,color,name,symbol,marker_size=18,marker_pen=None,z=0):
@@ -507,9 +542,20 @@ class TimelineWidget(QWidget):
         bolus=previous_observation(*self.last_point_lists['boluses'],x)
         carbs=previous_observation(*self.last_point_lists['carbs'],x)
         marked=is_005_bolus(bolus)
-        self.values['bolus'].setStyleSheet('font-size:16pt;font-weight:700;color:'+COLORS['bolus_005' if marked else 'bolus']+';')
+        source=(bolus or {}).get('details',{}).get('properties',{}).get('bolusSource')
+        color=COLORS['bolus_005'] if marked else '#087f86' if source==7 else '#686071' if source==8 else COLORS['bolus']
+        self.values['bolus'].setStyleSheet('font-size:16pt;font-weight:700;color:'+color+';')
         self.set_value('glucose',self.point_text(glucose))
         self._set_last_value('bolus',bolus,x);self._set_last_value('carbs',carbs,x)
+        self.extra_views['bolus'].setText('\n'.join(bolus_lines(bolus)))
+        basal=previous_observation(*self.point_lists['basal'],x)
+        if basal and x-basal['x']>720:basal=None
+        self.extra_views['basal'].setText('\n'.join(basal_lines(basal)))
+        gpoints,gxs=self.point_lists['glucose'];gi=bisect_left(gxs,glucose['x'])-1 if glucose else -1
+        previous=gpoints[gi] if gi>=0 else None
+        if previous and (previous.get('details',{}).get('kind','cgm')!='cgm' or bisect_right(gxs,previous['x'])-bisect_left(gxs,previous['x'])>1):previous=None
+        if glucose and (glucose.get('details',{}).get('kind','cgm')!='cgm' or bisect_right(gxs,glucose['x'])-bisect_left(gxs,glucose['x'])>1):previous=None
+        self.extra_views['sensor'].setText('\n'.join(sensor_lines(glucose,previous,self.bundle['data'].get('clock_changes',[]))))
         for key in ('profile','basal_profile','carb_ratio','sensitivity','target','iob','mode'):
             observation=ctx.get(key) or {};value=observation.get('value');unit=observation.get('unit') or ''
             label='Sin dato confirmado' if value is None else (f'{value:.3f}'.rstrip('0').rstrip('.').replace('.',',') if isinstance(value,(int,float)) else str(value))+' '+unit
@@ -563,6 +609,14 @@ class TimelineWidget(QWidget):
         dt=datetime.fromisoformat(point['time']);cursor=EPOCH+timedelta(seconds=x)
         self.time_labels[key].setText(dt.strftime('%H:%M:%S' if dt.date()==cursor.date() else '%d/%m %H:%M:%S'))
         self.values[key].setToolTip(text+'\n'+age)
+    def _label_profile(self):
+        if not hasattr(self,'profile_label') or not self.bundle:return
+        left,right=self.plots[0].viewRange()[0];points=self.point_lists.get('basal',([],[]))[0]
+        candidates=[p for p in points if left<=p['x']<=right and isinstance(p.get('details',{}).get('profile_rate'),(int,float))]
+        if not candidates:self.profile_label.hide();return
+        point=candidates[-1];rate=point['details']['profile_rate']
+        value=f'{rate:.3f}'.rstrip('0').rstrip('.').replace('.',',')
+        self.profile_label.setText('Perfil · '+value+' U/h');self.profile_label.setPos(point['x'],rate);self.profile_label.show()
     def set_value(self,key,text):
         self.observation_times[key]=text;label=self.values[key];parts=text.split('\n');main=parts[0]
         if main=='Sin observación cercana':main='Sin dato cercano'

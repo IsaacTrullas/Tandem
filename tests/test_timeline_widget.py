@@ -80,7 +80,7 @@ class TimelineWidgetTests(unittest.TestCase):
         modes={s['mode'] for s in self.w.mode_segments}
         self.assertIn('sleep',modes);self.assertIn('exercise',modes)
         self.assertGreaterEqual(self.w.mode_lane.minimumHeight(),58)
-        self.assertEqual(len(self.w.legend_entries),11)
+        self.assertEqual(len(self.w.legend_entries),13)
         self.assertTrue(all(plot.legend is None for plot in self.w.plots))
         self.assertTrue(all(s['end']<=START+23*3600 for s in self.w.mode_segments))
     def test_provenance_time_visible_without_expanding_and_warning_not_hidden(self):

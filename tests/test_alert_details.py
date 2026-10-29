@@ -41,7 +41,7 @@ class AlertDetailsTests(unittest.TestCase):
         self.assertIn('Alarma activada · evento 5', lines)
         zero = '\n'.join(alert_details(details(4, {'alertId': 0})))
         self.assertIn('alertId=0 · oaAlert_LIQ_LOW', zero)
-        self.assertIn('Sin descripción disponible', zero)
+        self.assertIn('Nivel de insulina bajo', zero)
 
     def test_acknowledgement_distinguishes_user_and_software_without_resolution(self):
         for value, expected in ((0, 'Reconocida por usuario'),

@@ -23,6 +23,10 @@ EVENT_LABELS = {
     33:'Llenado de cartucho', 61:'Llenado de cánula', 63:'Llenado de tubo',
     69:'Perfil de bomba', 229:'Cambio de modo', 230:'Cambio de control',
     369:'Alerta del sensor', 371:'Alerta del sensor reconocida',
+    8:'Alarma reconocida',26:'Alerta desactivada',27:'Alerta reconocida',28:'Alarma desactivada',
+    34:'Inicio de carga eléctrica',35:'Fin de carga eléctrica',
+    394:'Incorporación a sesión del sensor',447:'Fin de sesión del sensor',
+    370:'Alerta del sensor desactivada',313:'Estado diario de bomba',
 }
 
 
@@ -143,7 +147,7 @@ def load_timeline(dbpath,start,end,pump_serial=None):
                     (SELECT count(*) FROM api_events revision WHERE revision.device_id=e.device_id
                         AND revision.identity_key=e.identity_key) revision_count
                     FROM api_events e WHERE pump_serial=? AND local_date>=? AND local_date<=?
-                    AND event_code IN(3,4,5,11,12,13,14,16,20,21,33,61,63,64,65,66,69,229,230,279,280,369,371)
+                    AND event_code IN(3,4,5,8,11,12,13,14,16,20,21,26,27,28,33,34,35,55,59,61,63,64,65,66,69,229,230,279,280,313,369,370,371,394,447)
                     ORDER BY local_timestamp,id""",(pump_serial,lo,hi))
             if 'glucose_readings' in tables:
                 csv_glucose=rows("""SELECT r.id,r.local_timestamp,r.clock_status,g.origin,g.glucose_mg_dl
@@ -155,6 +159,9 @@ def load_timeline(dbpath,start,end,pump_serial=None):
                     WHERE r.pump_serial=? AND r.local_timestamp>=? AND r.local_timestamp<?
                     ORDER BY r.local_timestamp,r.id""",(pump_serial,first,last))
             _build_series(result,cgms,api,csv_glucose,csv_boluses,visible)
+            from .presentation_details import load_pdf_summary,alert_glucose_context
+            result['events']=alert_glucose_context(result['events'],result['glucose'],result['clock_changes'])
+            result['pdf_summary']=load_pdf_summary(conn,tables,first,last)
             previous,metrics,previous_warnings=load_predecessors(conn,tables,pump_serial,first)
             result['predecessors']=previous
             result['predecessor_source_rows_loaded']=metrics['source_rows_loaded']
@@ -168,13 +175,14 @@ def load_timeline(dbpath,start,end,pump_serial=None):
 
 
 def _build_series(result,cgms,api,csv_glucose,csv_boluses,visible):
-    api_glucose=Counter();stages=defaultdict(list);requests=defaultdict(list);completed=[]
+    api_glucose=Counter();stages=defaultdict(list);requests=defaultdict(list);completed=[];phase_index=defaultdict(list)
     active_identities=defaultdict(list)
     for row in list(cgms)+list(api):active_identities[(row['device_id'],row['identity_key'])].append(row['id'])
     for row in cgms:
         data=json.loads(row['values_json']);stamp=data.get('measurement_local_timestamp')
         if not stamp or not visible(stamp):continue
         details={'kind':'cgm','log_time':row['local_timestamp'],'measurement_time':stamp,
+                 'properties':data.get('properties',{}),'labels':data.get('labels',{}),
                  'qualifier':data.get('glucose_qualifier'),'identity_key':row['identity_key'],
                  'revision_count':row['revision_count'],
                  'revision_ids':active_identities[(row['device_id'],row['identity_key'])]}
@@ -182,6 +190,7 @@ def _build_series(result,cgms,api,csv_glucose,csv_boluses,visible):
         if _numeric(row['value']):api_glucose[(parse_local(stamp),float(row['value']),'sensor')]+=1
     for row in api:
         code=row['event_code'];data=json.loads(row['values_json']);props=data.get('properties') or {};stamp=row['local_timestamp']
+        if code in (20,21,55,59,65,66):phase_index[(row['device_id'],props.get('bolusId'))].append((row,data))
         if code==280:
             key=(row['device_id'],props.get('bolusId'))
             if props.get('bolusDeliveryStatus')==1:stages[key].append((row,props))
@@ -190,15 +199,16 @@ def _build_series(result,cgms,api,csv_glucose,csv_boluses,visible):
         if not stamp or not visible(stamp):continue
         if code==16 and row['unit']=='mg/dL' and _numeric(row['value']):
             result['glucose'].append(_point(stamp,row['value'],'mg/dL','api_bg',row['id'],
-                {'kind':'bg','properties':props,'revision_count':row['revision_count']}))
+                {'kind':'bg','properties':props,'labels':data.get('labels',{}),'revision_count':row['revision_count']}))
             api_glucose[(parse_local(stamp),float(row['value']),'pump_entry')]+=1
         if code==279:
             commanded=(data.get('measures',{}).get('commandedRate') or {}).get('value')
             profile=(data.get('measures',{}).get('profileBasalRate') or {}).get('value')
             if _numeric(commanded):result['basal'].append(_point(stamp,commanded,'U/h','api_basal_commanded',row['id'],
-                {'profile_rate':profile,'rate_meaning':'commanded_not_a_delivered_dose','properties':props}))
+                {'profile_rate':profile,'measures':data.get('measures',{}),'labels':data.get('labels',{}),'rate_meaning':'commanded_not_a_delivered_dose','properties':props}))
         if code in EVENT_LABELS:
             details={'event_code':code,'label':EVENT_LABELS[code],'kind':row['kind'],'properties':props,
+                     'measures':data.get('measures',{}),
                      'labels':data.get('labels',{}),'state_transitions':data.get('state_transitions',[])}
             point=_point(stamp,None,'','api_event',row['id'],details)
             if code in (13,14):result['clock_changes'].append(point)
@@ -223,10 +233,15 @@ def _build_series(result,cgms,api,csv_glucose,csv_boluses,visible):
         request=max(requested,key=lambda rp:parse_local(rp[0]['local_timestamp'])) if len(requested)==1 else None
         matches=[b for b in csv_boluses if parse_local(b['local_timestamp'])==parse_local(stamp)]
         details={'bolus_id':bid,'completed_at':row['local_timestamp'],'started_at':start['local_timestamp'] if start else None,
+                 'start_properties':json.loads(start['values_json']).get('properties',{}) if start else {},
+                 'labels':json.loads(row['values_json']).get('labels',{}),
+                 'measures':json.loads(row['values_json']).get('measures',{}),
                  'timestamp_meaning':'delivery_start' if start else 'delivery_completion',
                  'properties':props,'start_candidates':len(starts),'csv_candidates':len(matches),
                  'revision_count':row['revision_count'],
                  'revision_ids':active_identities[(row['device_id'],row['identity_key'])]}
+        details['phases']=[{'code':r['event_code'],'time':r['local_timestamp'],**d} for r,d in phase_index.get((row['device_id'],bid),[])
+                          if r['local_timestamp'] and abs((parse_local(r['local_timestamp'])-parse_local(stamp)).total_seconds())<=8*3600]
         if len(matches)==1:
             match=matches[0];consumed_csv.add(match['record_id']);details['csv_record_id']=match['record_id']
             details['csv_values']=dict(match);details['source_association']='same_start_time_candidate_not_identity_proof'

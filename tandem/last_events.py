@@ -79,7 +79,7 @@ def load_predecessors(conn,tables,pump_serial,cutoff):
         if 'api_events' in tables:
             api.extend(rows('SELECT '+_API_COLUMNS+''' FROM api_events e
                 WHERE pump_serial=? AND local_date>=? AND local_date<=?
-                AND local_timestamp>=? AND local_timestamp<=? AND event_code IN (64,280)
+                AND local_timestamp>=? AND local_timestamp<=? AND event_code IN (20,21,55,59,64,65,66,280)
                 ORDER BY local_timestamp,id''',(pump_serial,start.date().isoformat(),end.date().isoformat(),a,b)))
         if 'boluses' in tables and 'records' in tables:
             csv.extend(rows('''SELECT r.local_timestamp,r.clock_status,b.* FROM records r

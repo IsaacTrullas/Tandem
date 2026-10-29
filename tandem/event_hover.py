@@ -3,6 +3,7 @@ from datetime import datetime,timedelta
 from html import escape
 import math
 from .bolus_display import is_005_bolus,MARKED_BOLUS_LABEL
+from .presentation_details import bolus_lines,sensor_lines,basal_lines
 from .alert_details import alert_details
 
 EPOCH=datetime(1970,1,1)
@@ -34,6 +35,7 @@ def message(kind,point):
     details=point.get('details',{})
     if kind=='glucose' and details.get('kind')=='bg':kind='bg'
     title=TITLES.get(kind,details.get('label') or 'Evento')
+    if kind=='bg' and details.get('properties',{}).get('cgmCalibration')==1:title='Glucemia usada para calibración'
     if kind=='bolus' and is_005_bolus(point):title=MARKED_BOLUS_LABEL
     value=details.get('profile_rate') if kind=='basal_profile' else point.get('value')
     if kind=='event' and details.get('event_code')==229:
@@ -46,7 +48,17 @@ def message(kind,point):
     elif details.get('qualifier') in ('high','low'):
         body.append('ALTA · sin valor numérico' if details['qualifier']=='high' else 'BAJA · sin valor numérico')
     body.append(timestamp(point.get('time')))
+    if kind=='bolus' and bolus_lines(point)[0]!='Origen: Origen no identificado':body.extend(bolus_lines(point)[:1])
+    if kind in ('glucose','bg'):body.extend(sensor_lines(point)[1:])
+    if kind=='basal':body.extend(basal_lines(point)[1:])
     if kind=='event':body.extend(alert_details(details))
+    if kind=='event' and details.get('prior_glucose'):
+        observed=details['prior_glucose'];body.append('Glucosa previa: '+str(quantity(observed['value'],'mg/dL'))+' · '+timestamp(observed['time']))
+        body.append('Lectura '+str(int(observed['age_seconds']))+' s anterior; asociación temporal, sin inferir la causa.')
+    if kind=='event' and details.get('event_code')==447:
+        p=details.get('properties',{});body.extend(label+': '+str(p[key])+unit for key,label,unit in (('sessionDuration','Duración registrada',' días'),('sessionStopReason','Motivo de fin (código)',''),('stopSessionCode','Código de parada','')) if key in p)
+    if kind=='event':
+        for key,m in details.get('measures',{}).items():body.append(key+': '+str(quantity(m.get('value'),m.get('unit',''))))
     if kind=='carbs' and details.get('timestamp_meaning')=='bolus_request_not_actual_meal_time':
         body.append('Hora de solicitud del bolo')
     if (details.get('revision_count') or 0)>1 or len(details.get('revision_ids') or ())>1:

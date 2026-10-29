@@ -30,6 +30,8 @@ Desde 0.8.4, las tarjetas de bolo y carbohidratos muestran el último registro h
 
 ## Datos y funcionamiento
 
+En 0.9, la referencia basal tiene valor numérico y sombreado de diferencias, y los bolos de origen algoritmo/Bluetooth tienen colores diferenciados; 0,05 U conserva prioridad frambuesa. El inspector incorpora secciones plegables de bolo, basal, sensor, lista de eventos y resumen PDF. Cada información mantiene su fecha, unidad, fuente o estado de revisión. Los intervalos extendidos se sombrean con los extremos registrados; candidatos de fuentes distintas no se suman.
+
 La versión mantiene las consultas por ventanas y los límites de memoria. No cambia la base, las unidades, el reloj original ni los registros clínicos. Las configuraciones actuales no se aplican retrospectivamente. El rediseño modifica la presentación y la geometría de los modos, sin convertir observaciones parciales en una historia de ajustes completa.
 
 La fecha y el zoom se conservan al actualizar el archivo; **Más reciente** permite volver explícitamente al último día disponible.

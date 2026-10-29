@@ -6,7 +6,9 @@ El protocolo operativo está en [docs/PROTOCOLO_SINCRONIZACION.md](docs/PROTOCOL
 
 La [leyenda completa desglosada](docs/LEYENDA_PDF.md) contiene 33 elementos diarios y 3 de tendencia, con su símbolo fuente, dimensiones, unidades, reglas, relación con los CSV y estado de implementación. El atlas visual queda en `data/legend/atlas_leyenda.png`. Los candidatos nuevos se consultan en `legend_symbol_hits`, y la cobertura en `v_legend_coverage`.
 
-## Aplicación 0.8 · Qt
+## Aplicación 0.9 · Qt
+
+La cronología incorpora [comparación de basal, origen/desglose de bolos, extendidos, sensor, ciclo de alertas, mantenimiento y resúmenes PDF](docs/CRONOLOGIA_AMPLIADA.md). Los datos originales siguen intactos y la carga continúa por ventanas. La cifra siguiente corresponde a la primera verificación; el corte actualizado se consulta en Descargas.
 
 Validación real del 29/10/2026: acceso EU correcto, **401.411 eventos API** conservados hasta **29/10/2026 08:05:36**, **66.085 lecturas CSV contrastadas por hora de medición y valor**, cero conflictos. Esquema 7, 96 pruebas correctas. Quedan 36.042 registros de cuatro códigos sin interpretar (9, 22, 23, 52), preservados íntegramente. Las fechas de 2025 permanecen como reloj fuente, sin inferir inicio de tratamiento.
 

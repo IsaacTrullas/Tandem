@@ -1,4 +1,4 @@
-# Visualizador temporal · Tandem Local 0.8.4
+# Visualizador temporal · Tandem Local 0.9.0
 
 La pestaña **Gráfico** abre el último día con lecturas disponibles. Todas las consultas son de lectura y mantienen el reloj de la bomba. No se inicia ninguna descarga por abrir el gráfico.
 
@@ -15,6 +15,10 @@ La pestaña **Gráfico** abre el último día con lecturas disponibles. Todas la
 - Bajo la escala horaria aparecen las **horas de los eventos**, centradas sobre sus guías y repartidas en dos filas. Se mantienen todas las guías; cuando las horas están muy juntas, se priorizan las etiquetas que caben. Acerca el gráfico para separar las demás. Al pasar el ratón por esa zona del eje se muestran la fecha, los segundos y los tipos de evento cercanos. Con un zoom de hasta tres horas se rotulan los segundos; para más de 24 horas, también la fecha.
 
 ## Qué se representa
+
+La versión 0.9 añade [secciones plegables de detalle y ampliación de las series](CRONOLOGIA_AMPLIADA.md): origen/desglose de bolos, franjas de extendidos con extremos registrados, comparación basal, sensor/tendencia, eventos del tramo y resumen del periodo PDF. Las alertas identifican los tipos observados y pueden mostrar una lectura MCG anterior de hasta diez minutos, excluyendo cruces de reloj o revisiones ambiguas.
+
+La referencia del perfil basal se dibuja discontinua, con su valor numérico. Azul muestra tasa indicada superior al perfil; ámbar, inferior. Los cambios se dibujan desde su hora registrada hacia la observación siguiente, con cortes en huecos de más de doce minutos y cambios de reloj; se corrige el anterior escalonado hacia la izquierda. Los extremos posteriores no se prolongan al final del día.
 
 Glucosa del sensor y glucemia introducida se distinguen por sus marcadores. Se usa la hora de medición del sensor, conservando por separado la hora de ingreso en el registro. Se prefiere API sobre su copia CSV y no se suma información repetida.
 
@@ -46,4 +50,4 @@ La búsqueda de los últimos bolos/carbohidratos tiene un presupuesto separado d
 
 Si un tramo es demasiado denso, se pide reducirlo o se muestra el aviso de datos limitados. Los huecos no se rellenan ni las dosis se promedian silenciosamente. Las consultas se realizan fuera del hilo de la interfaz y el movimiento del ratón consulta estructuras del tramo cargado, sin acceder a SQLite en cada movimiento.
 
-Validación de esta versión: 270 pruebas correctas. Incluyen alertas y campos desconocidos, último registro fuera del día/semana, exclusión de futuros, fuentes, fases de bolo, duplicados, revisiones, relojes y límites de memoria. Se corrigió una omisión de carbohidratos CSV cuando su dosis ya estaba asociada con API pero faltaba la solicitud API de carbohidratos; se conserva la deduplicación entre fuentes. Revisión visual con datos reales en 1420x1000, 1180x820 y escala 200 %. No hay cambios en el esquema de la base ni en las filas originales.
+Validación de esta versión: 282 pruebas correctas. Incluyen conservación de originales, normalización de fases de bolo, fuentes, revisiones, relojes, ventanas, comparación basal, alertas/glucosa sin valores futuros y resúmenes PDF del periodo correcto con límites explícitos. Revisión visual con datos reales en 1420x1000, 1180x820 y escala 200 %. No hay cambios en el esquema ni en las filas originales.
