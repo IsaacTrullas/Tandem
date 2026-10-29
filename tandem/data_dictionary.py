@@ -219,9 +219,10 @@ def _build():
         'date_filter':'YYYY-MM-DD inclusive on first available date_field_preference; fields may represent measurement time, log time, source period or receipt time. Not interchangeable.',
         'row_identity':'Read source_object and source ids; never sum sources by name alone.'} for name,(obj,keys,dates) in DATASETS.items()}
     files=('schema.sql','api_schema.sql','event_codes.json','event_decode.py','semantic_definitions.py','data_dictionary.py','ingest.py','reader.py','pump_context.py','presentation_details.py','bolus_display.py','visual.py','quantitative.py','legend.py','pdf.py')
-    hashes={name:hashlib.sha256((BASE/name).read_bytes()).hexdigest() for name in files}
+    # Git may check out CRLF on Windows; fingerprint semantic sources consistently.
+    hashes={name:hashlib.sha256((BASE/name).read_text(encoding='utf-8').encode('utf-8')).hexdigest() for name in files}
     fingerprint=hashlib.sha256(json.dumps(hashes,sort_keys=True).encode()).hexdigest()
-    return {'format':FORMAT,'schema_version':SCHEMA_VERSION,'decoder_version':DECODER_VERSION,'fingerprint':fingerprint,'source_hashes':hashes,
+    return {'format':FORMAT,'schema_version':SCHEMA_VERSION,'decoder_version':DECODER_VERSION,'fingerprint':fingerprint,'source_hashes':hashes,'source_hash_encoding':'UTF-8 with LF normalized newlines',
        'contains_patient_rows':False,'semantic_rules':RULES,'objects':objects,'datasets':datasets,'json_contracts':JSON_CONTRACTS,
        'csv_sources':{name:{'headers':headers,'fields':[dict(header=h,meaning=CSV_FIELDS[h][0],target=CSV_FIELDS[h][1],normalization=CSV_FIELDS[h][2],unit=CSV_FIELDS[h][3]) if h in CSV_FIELDS else dict(header=h,meaning='Cantidad basal de la hora local '+h+', no otra dosis que sumar a fuentes solapadas.',target='basal_hourly.delivered_units WHERE hour='+h,normalization='number',unit='U') for h in headers],
             'source_time_header':'Fecha y hora de finalización' if name=='Bolo' else 'Fecha del evento' if name=='Suministro basal por hora' else 'Fecha y hora del caso',

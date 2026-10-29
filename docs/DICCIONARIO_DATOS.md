@@ -22,7 +22,7 @@ Este es el punto de entrada para saber qué almacena el proyecto y cómo utiliza
 - `source_unit_declared`: unidad del catálogo fuente, que puede describir la codificación original. `normalized_measures` declara solo las transformaciones realmente aplicadas por `event_decode.py`, incluyendo campo, factor y unidad de salida.
 - `interpretation_status`: distingue un campo descrito de un enum solo catalogado, unidad solo catalogada, reservado o no resuelto. Un enum comunitario no es una validación oficial del fabricante.
 - `scale_status`: indica si hay conversión explícita del decodificador o si la escala sigue sin validar. Por ejemplo, `rate` se conserva sin inventar factor.
-- `source_hashes` y `fingerprint`: identifican el código/esquema/catálogo exactos con que se generó el documento. No incluyen registros del paciente.
+- `source_hashes` y `fingerprint`: identifican el código/esquema/catálogo con que se generó el documento. Los textos se codifican en UTF-8 con saltos LF para que el cambio automático CRLF de Git en Windows no cambie la huella. No incluyen registros del paciente. El hash de procedencia del catálogo fuente se conserva por separado.
 
 Los sobres originales, documentos, texto OCR, nombres, rutas e identificadores pueden contener información personal. El catálogo describe esos campos, pero no contiene sus valores. Las credenciales están en el gestor de Windows y no forman parte del diccionario ni deben añadirse a los paquetes de análisis.
 
